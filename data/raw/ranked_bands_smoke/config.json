@@ -1,0 +1,8 @@
+{
+  "ruleset": "osu",
+  "band_spec": "1-1000:3,1001-10000:3",
+  "ranking_type": "performance",
+  "recent_scores_per_user": 3,
+  "best_scores_per_user": 2,
+  "random_seed": 42
+}
