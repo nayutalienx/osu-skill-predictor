@@ -134,7 +134,7 @@ This is one of the main reasons attempt-level rows are preferable for V1. Both t
 | Column | Type | Required | Description | Source |
 |---|---|---:|---|---|
 | `seed_band` | string | yes | Ranking band used when the user was sampled, for example `10001-20000`. | collector |
-| `seed_user_rank` | integer | yes | Approximate user rank inside the sampled ranking ladder at collection time. | rankings |
+| `seed_user_rank` | integer | yes | Actual `global_rank` returned by the rankings endpoint at collection time. | rankings |
 
 ### Player snapshot features
 
@@ -301,6 +301,13 @@ Recommended raw storage format for large collections:
 - one line per sampled user bundle
 - one line per beatmap cache entry
 - one line per sampled user manifest row
+- a `state.json` progress file for resumable collection and live progress watching
+
+Current collector limitation:
+
+- this ranked collector depends on the public osu! rankings endpoint
+- that endpoint currently exposes only the top `10000` users
+- so band-based seeding for this collector must stay within `1-10000` unless a different seeding strategy is implemented
 
 ## Next Step
 

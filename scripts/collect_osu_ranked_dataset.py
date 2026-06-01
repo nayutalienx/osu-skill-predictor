@@ -189,6 +189,85 @@ def read_jsonl(path: Path) -> list[Any]:
     return items
 
 
+def log_progress(message: str) -> None:
+    print(f"[{utc_now_iso()}] {message}", flush=True)
+
+
+def sorted_counter(counter: Counter[str]) -> dict[str, int]:
+    return {key: counter[key] for key in sorted(counter)}
+
+
+def sampled_band_counts(sampled_users: list[dict[str, Any]]) -> dict[str, int]:
+    return sorted_counter(Counter(str(item.get("band_label")) for item in sampled_users))
+
+
+def processed_band_counts(sampled_users: list[dict[str, Any]], processed_user_ids: set[int]) -> dict[str, int]:
+    return sorted_counter(
+        Counter(str(item.get("band_label")) for item in sampled_users if int(item.get("user_id")) in processed_user_ids)
+    )
+
+
+def update_state(
+    state_path: Path,
+    *,
+    phase: str | None = None,
+    export_started_at: str | None = None,
+    ranking_type: str | None = None,
+    ranking_total_available: int | None = None,
+    ranking_pages_total_available: int | None = None,
+    ranking_pages_fetched: int | None = None,
+    current_band_label: str | None = None,
+    current_page: int | None = None,
+    sampled_users: list[dict[str, Any]] | None = None,
+    processed_user_ids: set[int] | None = None,
+    cached_beatmap_ids: set[int] | None = None,
+    referenced_beatmap_ids: set[int] | None = None,
+    csv_row_count: int | None = None,
+    note: str | None = None,
+) -> None:
+    state = read_json(state_path, {})
+    if phase is not None:
+        state["phase"] = phase
+    if export_started_at is not None:
+        state["export_started_at"] = export_started_at
+    if ranking_type is not None:
+        state["ranking_type"] = ranking_type
+    if ranking_total_available is not None:
+        state["ranking_total_available"] = ranking_total_available
+    if ranking_pages_total_available is not None:
+        state["ranking_pages_total_available"] = ranking_pages_total_available
+    if ranking_pages_fetched is not None:
+        state["ranking_pages_fetched"] = ranking_pages_fetched
+    if current_band_label is not None:
+        state["current_band_label"] = current_band_label
+    if current_page is not None:
+        state["current_page"] = current_page
+    if sampled_users is not None:
+        unique_sampled_user_ids = {int(item["user_id"]) for item in sampled_users}
+        state["sampled_user_count"] = len(sampled_users)
+        state["unique_sampled_user_count"] = len(unique_sampled_user_ids)
+        state["total_sampled_user_count"] = len(sampled_users)
+        state["sampled_band_counts"] = sampled_band_counts(sampled_users)
+        if processed_user_ids is not None:
+            state["processed_band_counts"] = processed_band_counts(sampled_users, processed_user_ids)
+    if processed_user_ids is not None:
+        state["processed_user_ids"] = sorted(processed_user_ids)
+        state["processed_user_count"] = len(processed_user_ids)
+        if sampled_users is not None:
+            state["processed_band_counts"] = processed_band_counts(sampled_users, processed_user_ids)
+    if cached_beatmap_ids is not None:
+        state["cached_beatmap_ids"] = sorted(cached_beatmap_ids)
+        state["cached_beatmap_count"] = len(cached_beatmap_ids)
+    if referenced_beatmap_ids is not None:
+        state["referenced_beatmap_count"] = len(referenced_beatmap_ids)
+    if csv_row_count is not None:
+        state["csv_row_count"] = csv_row_count
+    if note is not None:
+        state["note"] = note
+    state["last_updated_at"] = utc_now_iso()
+    write_json(state_path, state)
+
+
 class OsuApiClient:
     def __init__(self, client_id: str, client_secret: str, timeout_seconds: float, request_delay_seconds: float) -> None:
         self._client_id = client_id
@@ -357,10 +436,149 @@ def parse_band_spec(spec: str) -> list[dict[str, Any]]:
     return bands
 
 
-def ranking_pages_for_band(rank_start: int, rank_end: int) -> list[int]:
-    first_page = math.ceil(rank_start / RANKING_PAGE_SIZE)
-    last_page = math.ceil(rank_end / RANKING_PAGE_SIZE)
-    return list(range(first_page, last_page + 1))
+def manifest_validation_errors(sampled_users: list[dict[str, Any]], bands: list[dict[str, Any]]) -> list[str]:
+    if not sampled_users:
+        return ["sampled_users.jsonl is empty"]
+
+    errors: list[str] = []
+    bands_by_label = {band["label"]: band for band in bands}
+    counts_by_band: Counter[str] = Counter()
+    seen_user_ids: set[int] = set()
+
+    for sampled_user in sampled_users:
+        band_label = str(sampled_user.get("band_label"))
+        user_id_raw = sampled_user.get("user_id")
+        seed_user_rank = first_not_none(sampled_user.get("seed_user_rank"), sampled_user.get("approx_rank"))
+        if band_label not in bands_by_label:
+            errors.append(f"Unknown band label in manifest: {band_label!r}")
+            continue
+        if user_id_raw is None:
+            errors.append(f"Manifest row is missing user_id for band {band_label}")
+            continue
+        user_id = int(user_id_raw)
+        if user_id in seen_user_ids:
+            errors.append(f"Duplicate sampled user_id detected: {user_id}")
+        seen_user_ids.add(user_id)
+
+        band = bands_by_label[band_label]
+        if seed_user_rank is None:
+            errors.append(f"Manifest row is missing seed_user_rank for user_id {user_id}")
+        else:
+            seed_user_rank = int(seed_user_rank)
+            if seed_user_rank < band["rank_start"] or seed_user_rank > band["rank_end"]:
+                errors.append(
+                    f"User {user_id} has rank {seed_user_rank}, outside requested band {band['label']}"
+                )
+        counts_by_band[band_label] += 1
+
+    for band in bands:
+        actual = counts_by_band[band["label"]]
+        expected = band["sample_size"]
+        if actual != expected:
+            errors.append(f"Band {band['label']} has {actual} sampled users, expected {expected}")
+    return errors
+
+
+def fetch_ranking_page(
+    client: OsuApiClient,
+    ranking_type: str,
+    page: int,
+    ranking_pages_path: Path,
+    page_cache: dict[int, dict[str, Any]],
+    fetched_pages: set[int],
+    band_label: str,
+) -> dict[str, Any]:
+    cached = page_cache.get(page)
+    if cached is not None:
+        return cached
+
+    ranking_response = client.get_rankings(ranking_type, page)
+    page_cache[page] = ranking_response
+    fetched_pages.add(page)
+    append_jsonl(
+        ranking_pages_path,
+        {
+            "page": page,
+            "ranking_type": ranking_type,
+            "requested_for_band": band_label,
+            "collected_at": utc_now_iso(),
+            "response": ranking_response,
+        },
+    )
+    return ranking_response
+
+
+def collect_band_candidates(
+    client: OsuApiClient,
+    band: dict[str, Any],
+    ranking_type: str,
+    ranking_pages_path: Path,
+    page_cache: dict[int, dict[str, Any]],
+    fetched_pages: set[int],
+    state_path: Path,
+    ranking_total_available: int,
+    ranking_pages_total_available: int,
+) -> list[dict[str, Any]]:
+    candidates_by_user_id: dict[int, dict[str, Any]] = {}
+    page = math.ceil(band["rank_start"] / RANKING_PAGE_SIZE)
+
+    while True:
+        ranking_response = fetch_ranking_page(
+            client,
+            ranking_type,
+            page,
+            ranking_pages_path,
+            page_cache,
+            fetched_pages,
+            band["label"],
+        )
+        update_state(
+            state_path,
+            phase="sampling_manifest",
+            ranking_total_available=ranking_total_available,
+            ranking_pages_total_available=ranking_pages_total_available,
+            ranking_pages_fetched=len(fetched_pages),
+            current_band_label=band["label"],
+            current_page=page,
+            note=f"Sampling candidates for band {band['label']}",
+        )
+
+        ranking_entries = ranking_response.get("ranking") or []
+        if not ranking_entries:
+            break
+
+        max_seen_rank: int | None = None
+        for entry in ranking_entries:
+            global_rank = entry.get("global_rank")
+            user = entry.get("user") or {}
+            user_id = user.get("id")
+            if global_rank is None or user_id is None:
+                continue
+            global_rank = int(global_rank)
+            user_id = int(user_id)
+            max_seen_rank = global_rank if max_seen_rank is None else max(max_seen_rank, global_rank)
+            if global_rank < band["rank_start"] or global_rank > band["rank_end"]:
+                continue
+            candidates_by_user_id.setdefault(
+                user_id,
+                {
+                    "user_id": user_id,
+                    "band_label": band["label"],
+                    "band_index": band["index"],
+                    "seed_user_rank": global_rank,
+                    "ranking_page": page,
+                },
+            )
+
+        if max_seen_rank is not None and max_seen_rank >= band["rank_end"]:
+            break
+
+        next_page = ((ranking_response.get("cursor") or {}).get("page")) if isinstance(ranking_response, dict) else None
+        if next_page is None or int(next_page) <= page:
+            break
+        page = int(next_page)
+
+    return sorted(candidates_by_user_id.values(), key=lambda item: (item["seed_user_rank"], item["user_id"]))
 
 
 def merge_scores(recent_scores: list[dict[str, Any]], best_scores: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -390,56 +608,110 @@ def build_sampling_manifest(
     ranking_type: str,
     random_seed: int,
     raw_dir: Path,
+    state_path: Path,
 ) -> list[dict[str, Any]]:
     sampled_users_path = raw_dir / "sampled_users.jsonl"
     ranking_pages_path = raw_dir / "ranking_pages.jsonl"
     if sampled_users_path.exists():
-        return read_jsonl(sampled_users_path)
+        sampled_users = read_jsonl(sampled_users_path)
+        errors = manifest_validation_errors(sampled_users, bands)
+        if errors:
+            joined = "; ".join(errors[:5])
+            raise RuntimeError(
+                "Existing sampled_users.jsonl is invalid. "
+                f"{joined}. Remove the run directory or use a new --output-dir."
+            )
+        update_state(
+            state_path,
+            phase="sampling_manifest_ready",
+            sampled_users=sampled_users,
+            note="Loaded existing valid sampled user manifest",
+        )
+        return sampled_users
+
+    page_cache: dict[int, dict[str, Any]] = {}
+    fetched_pages: set[int] = set()
+    first_page_response = fetch_ranking_page(
+        client,
+        ranking_type,
+        1,
+        ranking_pages_path,
+        page_cache,
+        fetched_pages,
+        bands[0]["label"],
+    )
+    ranking_total_available = int(first_page_response.get("total") or 0)
+    ranking_pages_total_available = math.ceil(ranking_total_available / RANKING_PAGE_SIZE) if ranking_total_available else 0
+    max_requested_rank = max(band["rank_end"] for band in bands)
+    if ranking_total_available <= 0:
+        raise RuntimeError("osu! rankings response did not expose a usable total user count")
+    if max_requested_rank > ranking_total_available:
+        raise RuntimeError(
+            "Requested band spec exceeds the available osu! public ranking coverage. "
+            f"Requested up to rank {max_requested_rank}, but the API currently exposes only top "
+            f"{ranking_total_available} users for this rankings endpoint."
+        )
+
+    update_state(
+        state_path,
+        phase="sampling_manifest",
+        ranking_type=ranking_type,
+        ranking_total_available=ranking_total_available,
+        ranking_pages_total_available=ranking_pages_total_available,
+        ranking_pages_fetched=len(fetched_pages),
+        note="Building sampled user manifest",
+    )
 
     sampled_users: list[dict[str, Any]] = []
     for band in bands:
-        candidates: list[dict[str, Any]] = []
-        pages = ranking_pages_for_band(band["rank_start"], band["rank_end"])
-        for page in pages:
-            ranking_response = client.get_rankings(ranking_type, page)
-            append_jsonl(
-                ranking_pages_path,
-                {
-                    "page": page,
-                    "ranking_type": ranking_type,
-                    "band_label": band["label"],
-                    "collected_at": utc_now_iso(),
-                    "response": ranking_response,
-                },
+        candidates = collect_band_candidates(
+            client,
+            band,
+            ranking_type,
+            ranking_pages_path,
+            page_cache,
+            fetched_pages,
+            state_path,
+            ranking_total_available,
+            ranking_pages_total_available,
+        )
+        if len(candidates) < band["sample_size"]:
+            raise RuntimeError(
+                f"Band {band['label']} yielded only {len(candidates)} unique users, "
+                f"but sample_size requires {band['sample_size']}."
             )
-            ranking_entries = ranking_response.get("ranking") or []
-            for index_on_page, entry in enumerate(ranking_entries):
-                approx_rank = (page - 1) * RANKING_PAGE_SIZE + index_on_page + 1
-                if approx_rank < band["rank_start"] or approx_rank > band["rank_end"]:
-                    continue
-                user = entry.get("user") or {}
-                user_id = user.get("id")
-                if user_id is None:
-                    continue
-                candidates.append(
-                    {
-                        "user_id": int(user_id),
-                        "band_label": band["label"],
-                        "band_index": band["index"],
-                        "approx_rank": approx_rank,
-                        "ranking_page": page,
-                    }
-                )
         rng = random.Random(random_seed + band["index"])
-        if len(candidates) <= band["sample_size"]:
-            band_sample = candidates
-        else:
-            band_sample = rng.sample(candidates, band["sample_size"])
-        sampled_users.extend(sorted(band_sample, key=lambda item: item["approx_rank"]))
+        band_sample = rng.sample(candidates, band["sample_size"])
+        sampled_users.extend(sorted(band_sample, key=lambda item: item["seed_user_rank"]))
+        update_state(
+            state_path,
+            phase="sampling_manifest",
+            ranking_total_available=ranking_total_available,
+            ranking_pages_total_available=ranking_pages_total_available,
+            ranking_pages_fetched=len(fetched_pages),
+            sampled_users=sampled_users,
+            current_band_label=band["label"],
+            note=f"Sampled {len(sampled_users)} users so far",
+        )
+        log_progress(
+            f"Sampled band {band['label']}: {band['sample_size']} users from {len(candidates)} candidates"
+        )
 
-    sampled_users = sorted(sampled_users, key=lambda item: (item["band_index"], item["approx_rank"], item["user_id"]))
+    sampled_users = sorted(sampled_users, key=lambda item: (item["band_index"], item["seed_user_rank"], item["user_id"]))
+    errors = manifest_validation_errors(sampled_users, bands)
+    if errors:
+        raise RuntimeError(f"Generated manifest failed validation: {'; '.join(errors[:5])}")
     for sampled_user in sampled_users:
         append_jsonl(sampled_users_path, sampled_user)
+    update_state(
+        state_path,
+        phase="sampling_manifest_ready",
+        ranking_total_available=ranking_total_available,
+        ranking_pages_total_available=ranking_pages_total_available,
+        ranking_pages_fetched=len(fetched_pages),
+        sampled_users=sampled_users,
+        note="Finished sampled user manifest",
+    )
     return sampled_users
 
 
@@ -454,8 +726,17 @@ def collect_user_snapshots(
     user_snapshots_path = raw_dir / "user_snapshots.jsonl"
     state = read_json(state_path, {})
     processed_user_ids = set(state.get("processed_user_ids", []))
+    total_sampled_users = len(sampled_users)
 
-    for sampled_user in sampled_users:
+    update_state(
+        state_path,
+        phase="collecting_user_snapshots",
+        sampled_users=sampled_users,
+        processed_user_ids=processed_user_ids,
+        note="Collecting user profiles and score snapshots",
+    )
+
+    for index, sampled_user in enumerate(sampled_users, start=1):
         user_id = sampled_user["user_id"]
         if user_id in processed_user_ids:
             continue
@@ -477,18 +758,24 @@ def collect_user_snapshots(
         append_jsonl(user_snapshots_path, bundle)
 
         processed_user_ids.add(user_id)
-        write_json(
+        update_state(
             state_path,
-            {
-                "processed_user_ids": sorted(processed_user_ids),
-                "processed_user_count": len(processed_user_ids),
-                "total_sampled_user_count": len(sampled_users),
-                "last_updated_at": utc_now_iso(),
-            },
+            phase="collecting_user_snapshots",
+            sampled_users=sampled_users,
+            processed_user_ids=processed_user_ids,
+            current_band_label=str(sampled_user["band_label"]),
+            note=f"Processed user {len(processed_user_ids)} / {total_sampled_users}",
         )
+        if len(processed_user_ids) == 1 or len(processed_user_ids) % 10 == 0 or index == total_sampled_users:
+            log_progress(f"Collected user snapshots: {len(processed_user_ids)} / {total_sampled_users}")
 
 
-def collect_missing_beatmaps(client: OsuApiClient, raw_dir: Path, state_path: Path) -> None:
+def collect_missing_beatmaps(
+    client: OsuApiClient,
+    raw_dir: Path,
+    state_path: Path,
+    sampled_users: list[dict[str, Any]],
+) -> None:
     user_snapshots_path = raw_dir / "user_snapshots.jsonl"
     beatmaps_path = raw_dir / "beatmaps.jsonl"
 
@@ -508,10 +795,21 @@ def collect_missing_beatmaps(client: OsuApiClient, raw_dir: Path, state_path: Pa
             if isinstance(beatmap, dict) and beatmap.get("id") is not None
         }
 
+    update_state(
+        state_path,
+        phase="collecting_beatmaps",
+        sampled_users=sampled_users,
+        cached_beatmap_ids=cached_beatmap_ids,
+        referenced_beatmap_ids=referenced_beatmap_ids,
+        note="Collecting beatmap metadata for referenced scores",
+    )
+
     missing_ids = sorted(referenced_beatmap_ids - cached_beatmap_ids)
     if not missing_ids:
+        log_progress("Beatmap cache already complete for all referenced beatmaps")
         return
 
+    log_progress(f"Collecting {len(missing_ids)} missing beatmaps")
     beatmaps = client.get_beatmaps(missing_ids)
     for beatmap in beatmaps:
         beatmap_id = beatmap.get("id")
@@ -520,9 +818,15 @@ def collect_missing_beatmaps(client: OsuApiClient, raw_dir: Path, state_path: Pa
         append_jsonl(beatmaps_path, beatmap)
         cached_beatmap_ids.add(int(beatmap_id))
 
-    state["cached_beatmap_ids"] = sorted(cached_beatmap_ids)
-    state["last_updated_at"] = utc_now_iso()
-    write_json(state_path, state)
+    update_state(
+        state_path,
+        phase="collecting_beatmaps",
+        sampled_users=sampled_users,
+        cached_beatmap_ids=cached_beatmap_ids,
+        referenced_beatmap_ids=referenced_beatmap_ids,
+        note=f"Beatmap cache contains {len(cached_beatmap_ids)} entries",
+    )
+    log_progress(f"Beatmap cache ready: {len(cached_beatmap_ids)} beatmaps")
 
 
 def load_beatmap_cache(raw_dir: Path) -> dict[int, dict[str, Any]]:
@@ -560,7 +864,7 @@ def flatten_row(
         "score_created_at": score_created_at,
         "score_source": score.get("_score_source", "recent"),
         "seed_band": sampled_user["band_label"],
-        "seed_user_rank": sampled_user["approx_rank"],
+        "seed_user_rank": first_not_none(sampled_user.get("seed_user_rank"), sampled_user.get("approx_rank")),
         "target_passed": score.get("passed"),
         "target_accuracy": percent_0_to_100(score.get("accuracy")),
         "score_rank": score.get("rank"),
@@ -618,7 +922,13 @@ def build_rows(raw_dir: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def build_profile_summary(rows: list[dict[str, Any]], metadata: dict[str, Any], csv_name: str) -> str:
+def build_profile_summary(
+    rows: list[dict[str, Any]],
+    metadata: dict[str, Any],
+    csv_name: str,
+    sampled_users: list[dict[str, Any]],
+    state: dict[str, Any],
+) -> str:
     total_rows = len(rows)
     unique_users = len({row["user_id"] for row in rows})
     unique_beatmaps = len({row["beatmap_id"] for row in rows})
@@ -655,6 +965,8 @@ def build_profile_summary(rows: list[dict[str, Any]], metadata: dict[str, Any], 
     band_counts = Counter(row["seed_band"] for row in rows)
     mod_counts = Counter((row["mods_raw"] or "NM") for row in rows)
     collected_values = sorted({row["collected_at"] for row in rows if row.get("collected_at")})
+    sampled_counts = sampled_band_counts(sampled_users)
+    processed_counts = state.get("processed_band_counts") or {}
 
     lines = [
         "# Profiling Summary",
@@ -673,6 +985,7 @@ def build_profile_summary(rows: list[dict[str, Any]], metadata: dict[str, Any], 
         f"- Ranking type: `{metadata['ranking_type']}`",
         f"- Random seed: `{metadata['random_seed']}`",
         f"- Band spec: `{metadata['band_spec']}`",
+        f"- Ranking total available from API: `{metadata['ranking_total_available']}`",
         f"- Recent scores per user: `{metadata['recent_scores_per_user']}`",
         f"- Best scores per user: `{metadata['best_scores_per_user']}`",
         "",
@@ -681,6 +994,17 @@ def build_profile_summary(rows: list[dict[str, Any]], metadata: dict[str, Any], 
         f"- Rows: `{total_rows}`",
         f"- Unique users: `{unique_users}`",
         f"- Unique beatmaps: `{unique_beatmaps}`",
+        f"- Sampled users requested: `{metadata['sampled_user_count']}`",
+        f"- Unique sampled users: `{metadata['unique_sampled_user_count']}`",
+        f"- Processed users: `{metadata['processed_user_count']}`",
+        "",
+        "## Sampled Users Per Band",
+        "",
+        *[f"- `{band}`: `{count}`" for band, count in sampled_counts.items()],
+        "",
+        "## Processed Users Per Band",
+        "",
+        *[f"- `{band}`: `{count}`" for band, count in sorted(processed_counts.items())],
         "",
         "## Target Distribution",
         "",
@@ -709,6 +1033,8 @@ def build_profile_summary(rows: list[dict[str, Any]], metadata: dict[str, Any], 
         "## Observations",
         "",
         "- This export uses deterministic band sampling, so re-running with the same config should preserve the sampled user pool.",
+        "- `seed_user_rank` now stores the actual `global_rank` returned by the rankings endpoint, not an inferred page offset.",
+        f"- The public osu! rankings endpoint currently exposes only the top `{metadata['ranking_total_available']}` users, so band specs must stay within that coverage.",
         "- JSONL storage keeps raw data append-friendly and much easier to inspect than large directories of tiny JSON files.",
         "- `best` score rows improve positive-label coverage, but source mix should be tracked during training.",
         "- Resume safety comes from append-only user snapshots, beatmap cache reuse, and state.json checkpoints.",
@@ -747,23 +1073,33 @@ def main() -> int:
         raise RuntimeError("Missing OSU_CLIENT_ID / OSU_CLIENT_SECRET in environment or .env.local")
 
     export_started_at = utc_now_iso()
+    state_path = output_dir / "state.json"
+    update_state(
+        state_path,
+        phase="initializing",
+        export_started_at=export_started_at,
+        ranking_type=args.ranking_type,
+        note="Initializing osu! ranked dataset collection",
+    )
     client = OsuApiClient(
         client_id=client_id,
         client_secret=client_secret,
         timeout_seconds=args.timeout_seconds,
         request_delay_seconds=args.request_delay_seconds,
     )
+    log_progress(f"Collector started in {output_dir.as_posix()}")
 
     bands = parse_band_spec(args.band_spec)
-    state_path = output_dir / "state.json"
-    sampled_users = build_sampling_manifest(client, bands, args.ranking_type, args.random_seed, raw_dir)
+    sampled_users = build_sampling_manifest(client, bands, args.ranking_type, args.random_seed, raw_dir, state_path)
     collect_user_snapshots(client, sampled_users, raw_dir, args.recent_scores_per_user, args.best_scores_per_user, state_path)
-    collect_missing_beatmaps(client, raw_dir, state_path)
+    collect_missing_beatmaps(client, raw_dir, state_path, sampled_users)
 
+    update_state(state_path, phase="building_rows", sampled_users=sampled_users, note="Flattening rows into CSV")
     rows = build_rows(raw_dir)
     csv_name = "osu_ranked_attempts_v1.csv"
     csv_path = output_dir / csv_name
     write_csv(csv_path, rows)
+    log_progress(f"Wrote CSV with {len(rows)} rows")
 
     export_finished_at = utc_now_iso()
     export_duration_seconds = round(
@@ -771,6 +1107,7 @@ def main() -> int:
         - datetime.fromisoformat(export_started_at.replace("Z", "+00:00")).timestamp(),
         3,
     )
+    final_state = read_json(state_path, {})
     metadata = {
         "export_started_at": export_started_at,
         "export_finished_at": export_finished_at,
@@ -778,13 +1115,27 @@ def main() -> int:
         "ranking_type": args.ranking_type,
         "random_seed": args.random_seed,
         "band_spec": args.band_spec,
+        "ranking_total_available": final_state.get("ranking_total_available"),
         "recent_scores_per_user": args.recent_scores_per_user,
         "best_scores_per_user": args.best_scores_per_user,
         "sampled_user_count": len(sampled_users),
+        "unique_sampled_user_count": len({int(item["user_id"]) for item in sampled_users}),
+        "processed_user_count": final_state.get("processed_user_count", 0),
         "exported_row_count": len(rows),
     }
     write_json(output_dir / "export_metadata.json", metadata)
-    (output_dir / "profiling_summary.md").write_text(build_profile_summary(rows, metadata, csv_name), encoding="utf-8")
+    update_state(
+        state_path,
+        phase="done",
+        sampled_users=sampled_users,
+        csv_row_count=len(rows),
+        note="Collection finished successfully",
+    )
+    final_state = read_json(state_path, {})
+    (output_dir / "profiling_summary.md").write_text(
+        build_profile_summary(rows, metadata, csv_name, sampled_users, final_state),
+        encoding="utf-8",
+    )
 
     print(f"Wrote {len(rows)} rows to {csv_path.as_posix()}")
     print(f"Run directory: {output_dir.as_posix()}")
