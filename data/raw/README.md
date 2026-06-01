@@ -15,7 +15,7 @@ creates a run directory here containing:
 - `raw/user_snapshots.jsonl`
 - `raw/beatmaps.jsonl`
 - export metadata and state checkpoints
-- flattened CSV, default name: `osu_ranked_attempts_v1.csv`
+- flattened CSV, default name: `osu_country_try_data_v1.csv`
 - profiling summary
 
 To watch progress for a running collection:
@@ -27,5 +27,6 @@ python scripts/show_collection_progress.py data/raw/<run_dir> --watch 5
 Notes:
 
 - progress is driven by `state.json`
-- the collector validates ranking coverage against the public API total before sampling users
-- the public rankings endpoint currently exposes only the top `10000` users, so band specs for this collector must stay within that range
+- the collector seeds users from top countries, then samples country-local player ranks
+- the public country player rankings endpoint currently exposes only the top `10000` users per country
+- sampling is deterministic for a fixed config and `random_seed`

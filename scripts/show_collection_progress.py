@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Print or watch progress for a ranked dataset collection run."""
+"""Print or watch progress for a country-seeded dataset collection run."""
 
 from __future__ import annotations
 
@@ -70,20 +70,21 @@ def render_progress(run_dir: Path) -> str:
         f"Last updated at: {state.get('last_updated_at', '')}",
         f"Elapsed seconds: {elapsed if elapsed is not None else ''}",
         f"Ranking type: {state.get('ranking_type') or config.get('ranking_type', '')}",
-        f"Ranking total available: {state.get('ranking_total_available', '')}",
+        f"Country leaderboard size: {state.get('top_country_total_available', '')}",
+        f"Selected countries: {state.get('selected_country_count', '')}",
         f"Users processed: {processed} / {total} ({progress:.2f}%)",
         f"Unique sampled users: {state.get('unique_sampled_user_count', '')}",
-        f"Ranking pages fetched: {state.get('ranking_pages_fetched', '')} / {state.get('ranking_pages_total_available', '')}",
+        f"Ranking pages fetched: {state.get('ranking_pages_fetched', '')}",
         f"Beatmaps cached: {state.get('cached_beatmap_count', '')}",
         f"Beatmaps referenced: {state.get('referenced_beatmap_count', '')}",
         f"CSV rows: {state.get('csv_row_count', '')}",
-        f"Current band: {state.get('current_band_label', '')}",
+        f"Current country: {state.get('current_country_code', '')}",
         f"Current page: {state.get('current_page', '')}",
         f"Note: {state.get('note', '')}",
         "",
-        *format_band_counts("Sampled users per band:", state.get("sampled_band_counts") or {}),
+        *format_band_counts("Sampled users per country:", state.get("sampled_country_counts") or {}),
         "",
-        *format_band_counts("Processed users per band:", state.get("processed_band_counts") or {}),
+        *format_band_counts("Processed users per country:", state.get("processed_country_counts") or {}),
     ]
     return "\n".join(lines)
 

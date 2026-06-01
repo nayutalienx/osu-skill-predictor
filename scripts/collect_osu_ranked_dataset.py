@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Collect a larger, reproducible osu! dataset by sampling users from ranking bands.
+Collect a reproducible osu! try dataset by sampling users from top country leaderboards.
 
 Storage layout is JSONL-oriented to avoid directory spam:
 - raw/sampled_users.jsonl
@@ -10,7 +10,7 @@ Storage layout is JSONL-oriented to avoid directory spam:
 - config.json
 - state.json
 - export_metadata.json
-- osu_ranked_attempts_v1.csv
+- osu_country_try_data_v1.csv
 - profiling_summary.md
 """
 
@@ -36,21 +36,11 @@ RANKING_PAGE_SIZE = 50
 API_BASE_URL = "https://osu.ppy.sh/api/v2"
 TOKEN_URL = "https://osu.ppy.sh/oauth/token"
 
-DEFAULT_BAND_SPEC = ",".join(
-    [
-        "1-1000:100",
-        "1001-10000:100",
-        "10001-20000:100",
-        "20001-30000:100",
-        "30001-40000:100",
-        "40001-50000:100",
-        "50001-60000:100",
-        "60001-70000:100",
-        "70001-80000:100",
-        "80001-90000:100",
-        "90001-100000:100",
-    ]
-)
+DEFAULT_TOP_COUNTRY_COUNT = 100
+DEFAULT_PLAYERS_PER_COUNTRY = 100
+DEFAULT_COUNTRY_RANKING_MAX = 10_000
+DEFAULT_COUNTRY_SAMPLE_MEAN_RATIO = 0.5
+DEFAULT_COUNTRY_SAMPLE_STD_RATIO = 0.2
 
 CSV_COLUMNS = [
     "row_id",
@@ -62,8 +52,10 @@ CSV_COLUMNS = [
     "collected_at",
     "score_created_at",
     "score_source",
-    "seed_band",
-    "seed_user_rank",
+    "seed_country_code",
+    "seed_country_rank",
+    "seed_country_player_rank",
+    "seed_global_rank",
     "target_passed",
     "target_accuracy",
     "score_rank",
@@ -197,13 +189,13 @@ def sorted_counter(counter: Counter[str]) -> dict[str, int]:
     return {key: counter[key] for key in sorted(counter)}
 
 
-def sampled_band_counts(sampled_users: list[dict[str, Any]]) -> dict[str, int]:
-    return sorted_counter(Counter(str(item.get("band_label")) for item in sampled_users))
+def sampled_country_counts(sampled_users: list[dict[str, Any]]) -> dict[str, int]:
+    return sorted_counter(Counter(str(item.get("country_code")) for item in sampled_users))
 
 
-def processed_band_counts(sampled_users: list[dict[str, Any]], processed_user_ids: set[int]) -> dict[str, int]:
+def processed_country_counts(sampled_users: list[dict[str, Any]], processed_user_ids: set[int]) -> dict[str, int]:
     return sorted_counter(
-        Counter(str(item.get("band_label")) for item in sampled_users if int(item.get("user_id")) in processed_user_ids)
+        Counter(str(item.get("country_code")) for item in sampled_users if int(item.get("user_id")) in processed_user_ids)
     )
 
 
@@ -213,10 +205,10 @@ def update_state(
     phase: str | None = None,
     export_started_at: str | None = None,
     ranking_type: str | None = None,
-    ranking_total_available: int | None = None,
-    ranking_pages_total_available: int | None = None,
+    top_country_total_available: int | None = None,
+    selected_country_count: int | None = None,
     ranking_pages_fetched: int | None = None,
-    current_band_label: str | None = None,
+    current_country_code: str | None = None,
     current_page: int | None = None,
     sampled_users: list[dict[str, Any]] | None = None,
     processed_user_ids: set[int] | None = None,
@@ -232,14 +224,14 @@ def update_state(
         state["export_started_at"] = export_started_at
     if ranking_type is not None:
         state["ranking_type"] = ranking_type
-    if ranking_total_available is not None:
-        state["ranking_total_available"] = ranking_total_available
-    if ranking_pages_total_available is not None:
-        state["ranking_pages_total_available"] = ranking_pages_total_available
+    if top_country_total_available is not None:
+        state["top_country_total_available"] = top_country_total_available
+    if selected_country_count is not None:
+        state["selected_country_count"] = selected_country_count
     if ranking_pages_fetched is not None:
         state["ranking_pages_fetched"] = ranking_pages_fetched
-    if current_band_label is not None:
-        state["current_band_label"] = current_band_label
+    if current_country_code is not None:
+        state["current_country_code"] = current_country_code
     if current_page is not None:
         state["current_page"] = current_page
     if sampled_users is not None:
@@ -247,14 +239,14 @@ def update_state(
         state["sampled_user_count"] = len(sampled_users)
         state["unique_sampled_user_count"] = len(unique_sampled_user_ids)
         state["total_sampled_user_count"] = len(sampled_users)
-        state["sampled_band_counts"] = sampled_band_counts(sampled_users)
+        state["sampled_country_counts"] = sampled_country_counts(sampled_users)
         if processed_user_ids is not None:
-            state["processed_band_counts"] = processed_band_counts(sampled_users, processed_user_ids)
+            state["processed_country_counts"] = processed_country_counts(sampled_users, processed_user_ids)
     if processed_user_ids is not None:
         state["processed_user_ids"] = sorted(processed_user_ids)
         state["processed_user_count"] = len(processed_user_ids)
         if sampled_users is not None:
-            state["processed_band_counts"] = processed_band_counts(sampled_users, processed_user_ids)
+            state["processed_country_counts"] = processed_country_counts(sampled_users, processed_user_ids)
     if cached_beatmap_ids is not None:
         state["cached_beatmap_ids"] = sorted(cached_beatmap_ids)
         state["cached_beatmap_count"] = len(cached_beatmap_ids)
@@ -307,8 +299,14 @@ class OsuApiClient:
             time.sleep(self._request_delay_seconds)
         return response.json()
 
-    def get_rankings(self, ranking_type: str, page: int) -> dict[str, Any]:
-        return self.get(f"/rankings/{RULESET}/{ranking_type}", params={"page": page})
+    def get_country_rankings(self, page: int) -> dict[str, Any]:
+        return self.get(f"/rankings/{RULESET}/country", params={"page": page})
+
+    def get_player_rankings(self, ranking_type: str, page: int, country_code: str | None = None) -> dict[str, Any]:
+        params: dict[str, Any] = {"page": page}
+        if country_code:
+            params["country"] = country_code
+        return self.get(f"/rankings/{RULESET}/{ranking_type}", params=params)
 
     def get_user(self, user_id: int) -> dict[str, Any]:
         return self.get(f"/users/{user_id}/{RULESET}")
@@ -354,17 +352,42 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         default=None,
-        help="Output directory for the collection run. Defaults to data/raw/osu_ranked_attempts_<timestamp>/",
-    )
-    parser.add_argument(
-        "--band-spec",
-        default=DEFAULT_BAND_SPEC,
-        help='Comma-separated band spec, e.g. "1-1000:100,1001-10000:100". Format is start-end:sample_size.',
+        help="Output directory for the collection run. Defaults to data/raw/osu_country_try_data_<timestamp>/",
     )
     parser.add_argument(
         "--ranking-type",
         default="performance",
         help="osu! ranking type used for user seeding.",
+    )
+    parser.add_argument(
+        "--top-country-count",
+        type=int,
+        default=DEFAULT_TOP_COUNTRY_COUNT,
+        help="How many top countries to seed from the country rankings endpoint.",
+    )
+    parser.add_argument(
+        "--players-per-country",
+        type=int,
+        default=DEFAULT_PLAYERS_PER_COUNTRY,
+        help="How many players to sample from each selected country ranking.",
+    )
+    parser.add_argument(
+        "--country-ranking-max",
+        type=int,
+        default=DEFAULT_COUNTRY_RANKING_MAX,
+        help="Maximum local rank within each country to sample from.",
+    )
+    parser.add_argument(
+        "--country-sample-mean-ratio",
+        type=float,
+        default=DEFAULT_COUNTRY_SAMPLE_MEAN_RATIO,
+        help="Mean position for truncated-normal country-rank sampling, expressed as a 0-1 ratio of local ranking depth.",
+    )
+    parser.add_argument(
+        "--country-sample-std-ratio",
+        type=float,
+        default=DEFAULT_COUNTRY_SAMPLE_STD_RATIO,
+        help="Standard deviation for truncated-normal country-rank sampling, expressed as a 0-1 ratio of local ranking depth.",
     )
     parser.add_argument(
         "--recent-scores-per-user",
@@ -382,7 +405,7 @@ def parse_args() -> argparse.Namespace:
         "--random-seed",
         type=int,
         default=42,
-        help="Seed used for reproducible user sampling within ranking bands.",
+        help="Seed used for reproducible user sampling within each country ranking.",
     )
     parser.add_argument(
         "--request-delay-seconds",
@@ -403,182 +426,431 @@ def build_output_dir(output_dir_arg: str | None) -> Path:
     if output_dir_arg:
         return Path(output_dir_arg)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return Path("data") / "raw" / f"osu_ranked_attempts_{timestamp}"
+    return Path("data") / "raw" / f"osu_country_try_data_{timestamp}"
 
 
-def parse_band_spec(spec: str) -> list[dict[str, Any]]:
-    bands: list[dict[str, Any]] = []
-    for index, raw_band in enumerate(spec.split(","), start=1):
-        token = raw_band.strip()
-        if not token:
-            continue
-        try:
-            range_part, sample_part = token.split(":", 1)
-            start_str, end_str = range_part.split("-", 1)
-            rank_start = int(start_str)
-            rank_end = int(end_str)
-            sample_size = int(sample_part)
-        except ValueError as exc:
-            raise ValueError(f"Invalid band spec token: {token!r}") from exc
-        if rank_start < 1 or rank_end < rank_start or sample_size < 1:
-            raise ValueError(f"Invalid band values: {token!r}")
-        bands.append(
-            {
-                "index": index,
-                "label": f"{rank_start}-{rank_end}",
-                "rank_start": rank_start,
-                "rank_end": rank_end,
-                "sample_size": sample_size,
-            }
-        )
-    if not bands:
-        raise ValueError("No valid ranking bands were parsed")
-    return bands
+def country_rank_to_page(country_player_rank: int) -> int:
+    return math.ceil(country_player_rank / RANKING_PAGE_SIZE)
 
 
-def manifest_validation_errors(sampled_users: list[dict[str, Any]], bands: list[dict[str, Any]]) -> list[str]:
+def sample_unique_country_ranks(
+    *,
+    max_rank: int,
+    sample_size: int,
+    rng: random.Random,
+    mean_ratio: float,
+    std_ratio: float,
+) -> list[int]:
+    if max_rank < sample_size:
+        raise RuntimeError(f"Cannot sample {sample_size} unique local ranks from only {max_rank} available entries")
+
+    mean = 1.0 + (max_rank - 1) * mean_ratio
+    std_dev = max(1.0, max_rank * std_ratio)
+    selected: set[int] = set()
+    attempts = 0
+    max_attempts = sample_size * 500
+
+    while len(selected) < sample_size and attempts < max_attempts:
+        attempts += 1
+        candidate = int(round(rng.gauss(mean, std_dev)))
+        candidate = min(max(candidate, 1), max_rank)
+        selected.add(candidate)
+
+    if len(selected) < sample_size:
+        remaining = [rank for rank in range(1, max_rank + 1) if rank not in selected]
+        selected.update(rng.sample(remaining, sample_size - len(selected)))
+
+    return sorted(selected)
+
+
+def manifest_validation_errors(
+    sampled_users: list[dict[str, Any]],
+    *,
+    players_per_country: int,
+    top_country_count: int,
+) -> list[str]:
     if not sampled_users:
         return ["sampled_users.jsonl is empty"]
 
     errors: list[str] = []
-    bands_by_label = {band["label"]: band for band in bands}
-    counts_by_band: Counter[str] = Counter()
+    counts_by_country: Counter[str] = Counter()
     seen_user_ids: set[int] = set()
+    seen_country_ranks: set[int] = set()
 
     for sampled_user in sampled_users:
-        band_label = str(sampled_user.get("band_label"))
+        country_code = str(sampled_user.get("country_code"))
         user_id_raw = sampled_user.get("user_id")
-        seed_user_rank = first_not_none(sampled_user.get("seed_user_rank"), sampled_user.get("approx_rank"))
-        if band_label not in bands_by_label:
-            errors.append(f"Unknown band label in manifest: {band_label!r}")
+        country_rank_raw = sampled_user.get("country_rank")
+        country_player_rank_raw = sampled_user.get("country_player_rank")
+        global_rank_raw = sampled_user.get("seed_global_rank")
+
+        if not country_code:
+            errors.append("Manifest row is missing country_code")
             continue
         if user_id_raw is None:
-            errors.append(f"Manifest row is missing user_id for band {band_label}")
+            errors.append(f"Manifest row is missing user_id for country {country_code}")
             continue
         user_id = int(user_id_raw)
         if user_id in seen_user_ids:
             errors.append(f"Duplicate sampled user_id detected: {user_id}")
         seen_user_ids.add(user_id)
 
-        band = bands_by_label[band_label]
-        if seed_user_rank is None:
-            errors.append(f"Manifest row is missing seed_user_rank for user_id {user_id}")
+        if country_rank_raw is None:
+            errors.append(f"Manifest row is missing country_rank for country {country_code}")
         else:
-            seed_user_rank = int(seed_user_rank)
-            if seed_user_rank < band["rank_start"] or seed_user_rank > band["rank_end"]:
-                errors.append(
-                    f"User {user_id} has rank {seed_user_rank}, outside requested band {band['label']}"
-                )
-        counts_by_band[band_label] += 1
+            seen_country_ranks.add(int(country_rank_raw))
 
-    for band in bands:
-        actual = counts_by_band[band["label"]]
-        expected = band["sample_size"]
-        if actual != expected:
-            errors.append(f"Band {band['label']} has {actual} sampled users, expected {expected}")
+        if country_player_rank_raw is None:
+            errors.append(f"Manifest row is missing country_player_rank for user {user_id}")
+        elif int(country_player_rank_raw) < 1:
+            errors.append(f"Invalid country_player_rank for user {user_id}: {country_player_rank_raw}")
+
+        if global_rank_raw is None:
+            errors.append(f"Manifest row is missing seed_global_rank for user {user_id}")
+
+        counts_by_country[country_code] += 1
+
+    if len(counts_by_country) != top_country_count:
+        errors.append(f"Manifest has {len(counts_by_country)} countries, expected {top_country_count}")
+    for country_code, count in sorted(counts_by_country.items()):
+        if count != players_per_country:
+            errors.append(f"Country {country_code} has {count} sampled users, expected {players_per_country}")
+    if len(seen_country_ranks) != top_country_count:
+        errors.append(
+            f"Manifest has {len(seen_country_ranks)} distinct country ranks, expected {top_country_count}"
+        )
     return errors
 
 
-def fetch_ranking_page(
+def fetch_country_ranking_page(
     client: OsuApiClient,
-    ranking_type: str,
     page: int,
     ranking_pages_path: Path,
-    page_cache: dict[int, dict[str, Any]],
-    fetched_pages: set[int],
-    band_label: str,
+    page_cache: dict[tuple[str, int], dict[str, Any]],
+    fetched_pages: set[tuple[str, int]],
 ) -> dict[str, Any]:
-    cached = page_cache.get(page)
+    cache_key = ("country", page)
+    cached = page_cache.get(cache_key)
     if cached is not None:
         return cached
 
-    ranking_response = client.get_rankings(ranking_type, page)
-    page_cache[page] = ranking_response
-    fetched_pages.add(page)
+    response = client.get_country_rankings(page)
+    page_cache[cache_key] = response
+    fetched_pages.add(cache_key)
     append_jsonl(
         ranking_pages_path,
         {
+            "request_kind": "country_rankings",
             "page": page,
-            "ranking_type": ranking_type,
-            "requested_for_band": band_label,
             "collected_at": utc_now_iso(),
-            "response": ranking_response,
+            "response": response,
         },
     )
-    return ranking_response
+    return response
 
 
-def collect_band_candidates(
+def fetch_country_player_page(
     client: OsuApiClient,
-    band: dict[str, Any],
+    *,
     ranking_type: str,
+    country_code: str,
+    page: int,
     ranking_pages_path: Path,
-    page_cache: dict[int, dict[str, Any]],
-    fetched_pages: set[int],
+    page_cache: dict[tuple[str, int], dict[str, Any]],
+    fetched_pages: set[tuple[str, int]],
+) -> dict[str, Any]:
+    cache_key = (country_code, page)
+    cached = page_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    response = client.get_player_rankings(ranking_type, page, country_code=country_code)
+    page_cache[cache_key] = response
+    fetched_pages.add(cache_key)
+    append_jsonl(
+        ranking_pages_path,
+        {
+            "request_kind": "player_rankings",
+            "ranking_type": ranking_type,
+            "country_code": country_code,
+            "page": page,
+            "collected_at": utc_now_iso(),
+            "response": response,
+        },
+    )
+    return response
+
+
+def select_top_countries(
+    client: OsuApiClient,
+    *,
+    top_country_count: int,
+    ranking_pages_path: Path,
+    page_cache: dict[tuple[str, int], dict[str, Any]],
+    fetched_pages: set[tuple[str, int]],
     state_path: Path,
-    ranking_total_available: int,
-    ranking_pages_total_available: int,
-) -> list[dict[str, Any]]:
-    candidates_by_user_id: dict[int, dict[str, Any]] = {}
-    page = math.ceil(band["rank_start"] / RANKING_PAGE_SIZE)
+) -> tuple[list[dict[str, Any]], int]:
+    selected_countries: list[dict[str, Any]] = []
+    page = 1
+    total_available = 0
 
-    while True:
-        ranking_response = fetch_ranking_page(
-            client,
-            ranking_type,
-            page,
-            ranking_pages_path,
-            page_cache,
-            fetched_pages,
-            band["label"],
-        )
-        update_state(
-            state_path,
-            phase="sampling_manifest",
-            ranking_total_available=ranking_total_available,
-            ranking_pages_total_available=ranking_pages_total_available,
-            ranking_pages_fetched=len(fetched_pages),
-            current_band_label=band["label"],
-            current_page=page,
-            note=f"Sampling candidates for band {band['label']}",
-        )
-
-        ranking_entries = ranking_response.get("ranking") or []
+    while len(selected_countries) < top_country_count:
+        response = fetch_country_ranking_page(client, page, ranking_pages_path, page_cache, fetched_pages)
+        total_available = int(response.get("total") or 0)
+        ranking_entries = response.get("ranking") or []
         if not ranking_entries:
             break
 
-        max_seen_rank: int | None = None
-        for entry in ranking_entries:
-            global_rank = entry.get("global_rank")
-            user = entry.get("user") or {}
-            user_id = user.get("id")
-            if global_rank is None or user_id is None:
+        update_state(
+            state_path,
+            phase="selecting_countries",
+            top_country_total_available=total_available,
+            selected_country_count=len(selected_countries),
+            ranking_pages_fetched=len(fetched_pages),
+            current_page=page,
+            note="Selecting top countries from the country leaderboard",
+        )
+
+        for index_on_page, entry in enumerate(ranking_entries):
+            if len(selected_countries) >= top_country_count:
+                break
+            country_rank = (page - 1) * RANKING_PAGE_SIZE + index_on_page + 1
+            country_code = entry.get("code")
+            if not country_code:
                 continue
-            global_rank = int(global_rank)
-            user_id = int(user_id)
-            max_seen_rank = global_rank if max_seen_rank is None else max(max_seen_rank, global_rank)
-            if global_rank < band["rank_start"] or global_rank > band["rank_end"]:
-                continue
-            candidates_by_user_id.setdefault(
-                user_id,
+            selected_countries.append(
                 {
-                    "user_id": user_id,
-                    "band_label": band["label"],
-                    "band_index": band["index"],
-                    "seed_user_rank": global_rank,
-                    "ranking_page": page,
-                },
+                    "country_code": str(country_code),
+                    "country_rank": country_rank,
+                    "active_users": entry.get("active_users"),
+                    "play_count": entry.get("play_count"),
+                    "ranked_score": entry.get("ranked_score"),
+                }
             )
 
-        if max_seen_rank is not None and max_seen_rank >= band["rank_end"]:
-            break
-
-        next_page = ((ranking_response.get("cursor") or {}).get("page")) if isinstance(ranking_response, dict) else None
+        next_page = ((response.get("cursor") or {}).get("page")) if isinstance(response, dict) else None
         if next_page is None or int(next_page) <= page:
             break
         page = int(next_page)
 
-    return sorted(candidates_by_user_id.values(), key=lambda item: (item["seed_user_rank"], item["user_id"]))
+    if total_available <= 0:
+        raise RuntimeError("osu! country rankings response did not expose a usable total country count")
+    if top_country_count > total_available:
+        raise RuntimeError(
+            f"Requested top_country_count={top_country_count}, but the API exposes only {total_available} countries"
+        )
+    if len(selected_countries) < top_country_count:
+        raise RuntimeError(
+            f"Collected only {len(selected_countries)} top countries, expected {top_country_count}"
+        )
+    return selected_countries, total_available
+
+
+def sample_country_users(
+    client: OsuApiClient,
+    *,
+    country: dict[str, Any],
+    ranking_type: str,
+    players_per_country: int,
+    country_ranking_max: int,
+    mean_ratio: float,
+    std_ratio: float,
+    random_seed: int,
+    ranking_pages_path: Path,
+    page_cache: dict[tuple[str, int], dict[str, Any]],
+    fetched_pages: set[tuple[str, int]],
+    state_path: Path,
+    top_country_total_available: int,
+    selected_country_count: int,
+) -> list[dict[str, Any]]:
+    country_code = str(country["country_code"])
+    first_page_response = fetch_country_player_page(
+        client,
+        ranking_type=ranking_type,
+        country_code=country_code,
+        page=1,
+        ranking_pages_path=ranking_pages_path,
+        page_cache=page_cache,
+        fetched_pages=fetched_pages,
+    )
+    country_total_available = int(first_page_response.get("total") or 0)
+    effective_max_rank = min(country_ranking_max, country_total_available)
+    if effective_max_rank < players_per_country:
+        raise RuntimeError(
+            f"Country {country_code} exposes only {effective_max_rank} local ranks, "
+            f"but players_per_country requires {players_per_country}"
+        )
+
+    rng = random.Random(random_seed + int(country["country_rank"]))
+    sampled_local_ranks = sample_unique_country_ranks(
+        max_rank=effective_max_rank,
+        sample_size=players_per_country,
+        rng=rng,
+        mean_ratio=mean_ratio,
+        std_ratio=std_ratio,
+    )
+    target_ranks = set(sampled_local_ranks)
+    pages_to_fetch = sorted({country_rank_to_page(local_rank) for local_rank in sampled_local_ranks} | {1})
+    selected_users: dict[int, dict[str, Any]] = {}
+
+    for page in pages_to_fetch:
+        response = first_page_response if page == 1 else fetch_country_player_page(
+            client,
+            ranking_type=ranking_type,
+            country_code=country_code,
+            page=page,
+            ranking_pages_path=ranking_pages_path,
+            page_cache=page_cache,
+            fetched_pages=fetched_pages,
+        )
+        update_state(
+            state_path,
+            phase="sampling_manifest",
+            top_country_total_available=top_country_total_available,
+            selected_country_count=selected_country_count,
+            ranking_pages_fetched=len(fetched_pages),
+            current_country_code=country_code,
+            current_page=page,
+            note=f"Sampling users for country {country_code}",
+        )
+
+        ranking_entries = response.get("ranking") or []
+        for index_on_page, entry in enumerate(ranking_entries):
+            local_rank = (page - 1) * RANKING_PAGE_SIZE + index_on_page + 1
+            if local_rank not in target_ranks:
+                continue
+            user = entry.get("user") or {}
+            user_id = user.get("id")
+            global_rank = entry.get("global_rank")
+            if user_id is None or global_rank is None:
+                continue
+            selected_users[local_rank] = {
+                "user_id": int(user_id),
+                "country_code": country_code,
+                "country_rank": int(country["country_rank"]),
+                "country_player_rank": local_rank,
+                "seed_global_rank": int(global_rank),
+                "ranking_page": page,
+            }
+
+    missing_ranks = sorted(target_ranks - set(selected_users))
+    if missing_ranks:
+        raise RuntimeError(
+            f"Country {country_code} is missing sampled local ranks after page fetch: {missing_ranks[:10]}"
+        )
+
+    return [selected_users[local_rank] for local_rank in sorted(selected_users)]
+
+
+def build_sampling_manifest(
+    client: OsuApiClient,
+    *,
+    ranking_type: str,
+    top_country_count: int,
+    players_per_country: int,
+    country_ranking_max: int,
+    mean_ratio: float,
+    std_ratio: float,
+    random_seed: int,
+    raw_dir: Path,
+    state_path: Path,
+) -> list[dict[str, Any]]:
+    sampled_users_path = raw_dir / "sampled_users.jsonl"
+    ranking_pages_path = raw_dir / "ranking_pages.jsonl"
+    if sampled_users_path.exists():
+        sampled_users = read_jsonl(sampled_users_path)
+        errors = manifest_validation_errors(
+            sampled_users,
+            players_per_country=players_per_country,
+            top_country_count=top_country_count,
+        )
+        if errors:
+            joined = "; ".join(errors[:5])
+            raise RuntimeError(
+                "Existing sampled_users.jsonl is invalid. "
+                f"{joined}. Remove the run directory or use a new --output-dir."
+            )
+        update_state(
+            state_path,
+            phase="sampling_manifest_ready",
+            sampled_users=sampled_users,
+            selected_country_count=len({item['country_code'] for item in sampled_users}),
+            note="Loaded existing valid sampled user manifest",
+        )
+        return sampled_users
+
+    page_cache: dict[tuple[str, int], dict[str, Any]] = {}
+    fetched_pages: set[tuple[str, int]] = set()
+    selected_countries, top_country_total_available = select_top_countries(
+        client,
+        top_country_count=top_country_count,
+        ranking_pages_path=ranking_pages_path,
+        page_cache=page_cache,
+        fetched_pages=fetched_pages,
+        state_path=state_path,
+    )
+
+    sampled_users: list[dict[str, Any]] = []
+    for country in selected_countries:
+        country_users = sample_country_users(
+            client,
+            country=country,
+            ranking_type=ranking_type,
+            players_per_country=players_per_country,
+            country_ranking_max=country_ranking_max,
+            mean_ratio=mean_ratio,
+            std_ratio=std_ratio,
+            random_seed=random_seed,
+            ranking_pages_path=ranking_pages_path,
+            page_cache=page_cache,
+            fetched_pages=fetched_pages,
+            state_path=state_path,
+            top_country_total_available=top_country_total_available,
+            selected_country_count=len(selected_countries),
+        )
+        sampled_users.extend(country_users)
+        update_state(
+            state_path,
+            phase="sampling_manifest",
+            top_country_total_available=top_country_total_available,
+            selected_country_count=len(selected_countries),
+            ranking_pages_fetched=len(fetched_pages),
+            sampled_users=sampled_users,
+            current_country_code=str(country["country_code"]),
+            note=f"Sampled {len(sampled_users)} users so far",
+        )
+        log_progress(
+            f"Sampled country {country['country_code']}: {players_per_country} users from top {country_ranking_max} local ranks"
+        )
+
+    sampled_users = sorted(
+        sampled_users,
+        key=lambda item: (
+            int(item["country_rank"]),
+            str(item["country_code"]),
+            int(item["country_player_rank"]),
+            int(item["user_id"]),
+        ),
+    )
+    errors = manifest_validation_errors(
+        sampled_users,
+        players_per_country=players_per_country,
+        top_country_count=top_country_count,
+    )
+    if errors:
+        raise RuntimeError(f"Generated manifest failed validation: {'; '.join(errors[:5])}")
+    for sampled_user in sampled_users:
+        append_jsonl(sampled_users_path, sampled_user)
+    update_state(
+        state_path,
+        phase="sampling_manifest_ready",
+        top_country_total_available=top_country_total_available,
+        selected_country_count=len(selected_countries),
+        ranking_pages_fetched=len(fetched_pages),
+        sampled_users=sampled_users,
+        note="Finished sampled user manifest",
+    )
+    return sampled_users
 
 
 def merge_scores(recent_scores: list[dict[str, Any]], best_scores: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -600,119 +872,6 @@ def merge_scores(recent_scores: list[dict[str, Any]], best_scores: list[dict[str
             score_copy["_score_source"] = score_source
             merged.append(score_copy)
     return merged
-
-
-def build_sampling_manifest(
-    client: OsuApiClient,
-    bands: list[dict[str, Any]],
-    ranking_type: str,
-    random_seed: int,
-    raw_dir: Path,
-    state_path: Path,
-) -> list[dict[str, Any]]:
-    sampled_users_path = raw_dir / "sampled_users.jsonl"
-    ranking_pages_path = raw_dir / "ranking_pages.jsonl"
-    if sampled_users_path.exists():
-        sampled_users = read_jsonl(sampled_users_path)
-        errors = manifest_validation_errors(sampled_users, bands)
-        if errors:
-            joined = "; ".join(errors[:5])
-            raise RuntimeError(
-                "Existing sampled_users.jsonl is invalid. "
-                f"{joined}. Remove the run directory or use a new --output-dir."
-            )
-        update_state(
-            state_path,
-            phase="sampling_manifest_ready",
-            sampled_users=sampled_users,
-            note="Loaded existing valid sampled user manifest",
-        )
-        return sampled_users
-
-    page_cache: dict[int, dict[str, Any]] = {}
-    fetched_pages: set[int] = set()
-    first_page_response = fetch_ranking_page(
-        client,
-        ranking_type,
-        1,
-        ranking_pages_path,
-        page_cache,
-        fetched_pages,
-        bands[0]["label"],
-    )
-    ranking_total_available = int(first_page_response.get("total") or 0)
-    ranking_pages_total_available = math.ceil(ranking_total_available / RANKING_PAGE_SIZE) if ranking_total_available else 0
-    max_requested_rank = max(band["rank_end"] for band in bands)
-    if ranking_total_available <= 0:
-        raise RuntimeError("osu! rankings response did not expose a usable total user count")
-    if max_requested_rank > ranking_total_available:
-        raise RuntimeError(
-            "Requested band spec exceeds the available osu! public ranking coverage. "
-            f"Requested up to rank {max_requested_rank}, but the API currently exposes only top "
-            f"{ranking_total_available} users for this rankings endpoint."
-        )
-
-    update_state(
-        state_path,
-        phase="sampling_manifest",
-        ranking_type=ranking_type,
-        ranking_total_available=ranking_total_available,
-        ranking_pages_total_available=ranking_pages_total_available,
-        ranking_pages_fetched=len(fetched_pages),
-        note="Building sampled user manifest",
-    )
-
-    sampled_users: list[dict[str, Any]] = []
-    for band in bands:
-        candidates = collect_band_candidates(
-            client,
-            band,
-            ranking_type,
-            ranking_pages_path,
-            page_cache,
-            fetched_pages,
-            state_path,
-            ranking_total_available,
-            ranking_pages_total_available,
-        )
-        if len(candidates) < band["sample_size"]:
-            raise RuntimeError(
-                f"Band {band['label']} yielded only {len(candidates)} unique users, "
-                f"but sample_size requires {band['sample_size']}."
-            )
-        rng = random.Random(random_seed + band["index"])
-        band_sample = rng.sample(candidates, band["sample_size"])
-        sampled_users.extend(sorted(band_sample, key=lambda item: item["seed_user_rank"]))
-        update_state(
-            state_path,
-            phase="sampling_manifest",
-            ranking_total_available=ranking_total_available,
-            ranking_pages_total_available=ranking_pages_total_available,
-            ranking_pages_fetched=len(fetched_pages),
-            sampled_users=sampled_users,
-            current_band_label=band["label"],
-            note=f"Sampled {len(sampled_users)} users so far",
-        )
-        log_progress(
-            f"Sampled band {band['label']}: {band['sample_size']} users from {len(candidates)} candidates"
-        )
-
-    sampled_users = sorted(sampled_users, key=lambda item: (item["band_index"], item["seed_user_rank"], item["user_id"]))
-    errors = manifest_validation_errors(sampled_users, bands)
-    if errors:
-        raise RuntimeError(f"Generated manifest failed validation: {'; '.join(errors[:5])}")
-    for sampled_user in sampled_users:
-        append_jsonl(sampled_users_path, sampled_user)
-    update_state(
-        state_path,
-        phase="sampling_manifest_ready",
-        ranking_total_available=ranking_total_available,
-        ranking_pages_total_available=ranking_pages_total_available,
-        ranking_pages_fetched=len(fetched_pages),
-        sampled_users=sampled_users,
-        note="Finished sampled user manifest",
-    )
-    return sampled_users
 
 
 def collect_user_snapshots(
@@ -737,7 +896,7 @@ def collect_user_snapshots(
     )
 
     for index, sampled_user in enumerate(sampled_users, start=1):
-        user_id = sampled_user["user_id"]
+        user_id = int(sampled_user["user_id"])
         if user_id in processed_user_ids:
             continue
 
@@ -763,7 +922,7 @@ def collect_user_snapshots(
             phase="collecting_user_snapshots",
             sampled_users=sampled_users,
             processed_user_ids=processed_user_ids,
-            current_band_label=str(sampled_user["band_label"]),
+            current_country_code=str(sampled_user["country_code"]),
             note=f"Processed user {len(processed_user_ids)} / {total_sampled_users}",
         )
         if len(processed_user_ids) == 1 or len(processed_user_ids) % 10 == 0 or index == total_sampled_users:
@@ -863,8 +1022,10 @@ def flatten_row(
         "collected_at": collected_at,
         "score_created_at": score_created_at,
         "score_source": score.get("_score_source", "recent"),
-        "seed_band": sampled_user["band_label"],
-        "seed_user_rank": first_not_none(sampled_user.get("seed_user_rank"), sampled_user.get("approx_rank")),
+        "seed_country_code": sampled_user.get("country_code"),
+        "seed_country_rank": sampled_user.get("country_rank"),
+        "seed_country_player_rank": sampled_user.get("country_player_rank"),
+        "seed_global_rank": sampled_user.get("seed_global_rank"),
         "target_passed": score.get("passed"),
         "target_accuracy": percent_0_to_100(score.get("accuracy")),
         "score_rank": score.get("rank"),
@@ -962,11 +1123,11 @@ def build_profile_summary(
         ]
 
     source_counts = Counter(row["score_source"] for row in rows)
-    band_counts = Counter(row["seed_band"] for row in rows)
+    country_row_counts = Counter(str(row["seed_country_code"]) for row in rows)
     mod_counts = Counter((row["mods_raw"] or "NM") for row in rows)
     collected_values = sorted({row["collected_at"] for row in rows if row.get("collected_at")})
-    sampled_counts = sampled_band_counts(sampled_users)
-    processed_counts = state.get("processed_band_counts") or {}
+    sampled_counts = sampled_country_counts(sampled_users)
+    processed_counts = state.get("processed_country_counts") or {}
 
     lines = [
         "# Profiling Summary",
@@ -984,8 +1145,12 @@ def build_profile_summary(
         f"- Latest row collected_at: `{collected_values[-1] if collected_values else ''}`",
         f"- Ranking type: `{metadata['ranking_type']}`",
         f"- Random seed: `{metadata['random_seed']}`",
-        f"- Band spec: `{metadata['band_spec']}`",
-        f"- Ranking total available from API: `{metadata['ranking_total_available']}`",
+        f"- Top country count: `{metadata['top_country_count']}`",
+        f"- Players per country: `{metadata['players_per_country']}`",
+        f"- Country ranking max: `{metadata['country_ranking_max']}`",
+        f"- Country sample mean ratio: `{metadata['country_sample_mean_ratio']}`",
+        f"- Country sample std ratio: `{metadata['country_sample_std_ratio']}`",
+        f"- Country leaderboard size: `{metadata['top_country_total_available']}`",
         f"- Recent scores per user: `{metadata['recent_scores_per_user']}`",
         f"- Best scores per user: `{metadata['best_scores_per_user']}`",
         "",
@@ -998,13 +1163,13 @@ def build_profile_summary(
         f"- Unique sampled users: `{metadata['unique_sampled_user_count']}`",
         f"- Processed users: `{metadata['processed_user_count']}`",
         "",
-        "## Sampled Users Per Band",
+        "## Sampled Users Per Country",
         "",
-        *[f"- `{band}`: `{count}`" for band, count in sampled_counts.items()],
+        *[f"- `{country}`: `{count}`" for country, count in sampled_counts.items()],
         "",
-        "## Processed Users Per Band",
+        "## Processed Users Per Country",
         "",
-        *[f"- `{band}`: `{count}`" for band, count in sorted(processed_counts.items())],
+        *[f"- `{country}`: `{count}`" for country, count in sorted(processed_counts.items())],
         "",
         "## Target Distribution",
         "",
@@ -1022,9 +1187,9 @@ def build_profile_summary(
         "",
         *[f"- `{source}`: `{count}`" for source, count in source_counts.most_common()],
         "",
-        "## Rows Per Ranking Band",
+        "## Rows Per Country",
         "",
-        *[f"- `{band}`: `{count}`" for band, count in sorted(band_counts.items())],
+        *[f"- `{country}`: `{count}`" for country, count in sorted(country_row_counts.items())],
         "",
         "## Top Mods",
         "",
@@ -1032,9 +1197,9 @@ def build_profile_summary(
         "",
         "## Observations",
         "",
-        "- This export uses deterministic band sampling, so re-running with the same config should preserve the sampled user pool.",
-        "- `seed_user_rank` now stores the actual `global_rank` returned by the rankings endpoint, not an inferred page offset.",
-        f"- The public osu! rankings endpoint currently exposes only the top `{metadata['ranking_total_available']}` users, so band specs must stay within that coverage.",
+        "- This export uses deterministic country-local rank sampling, so re-running with the same config should preserve the sampled user pool.",
+        "- `seed_country_player_rank` is the sampled local rank inside the country leaderboard, while `seed_global_rank` keeps the player's global position at sampling time.",
+        "- The public country player rankings endpoint currently exposes only the top `10000` users per country, so `country_ranking_max` must stay within that coverage.",
         "- JSONL storage keeps raw data append-friendly and much easier to inspect than large directories of tiny JSON files.",
         "- `best` score rows improve positive-label coverage, but source mix should be tracked during training.",
         "- Resume safety comes from append-only user snapshots, beatmap cache reuse, and state.json checkpoints.",
@@ -1046,6 +1211,17 @@ def main() -> int:
     args = parse_args()
     load_local_env()
 
+    if args.top_country_count < 1:
+        raise RuntimeError("top_country_count must be >= 1")
+    if args.players_per_country < 1:
+        raise RuntimeError("players_per_country must be >= 1")
+    if args.country_ranking_max < 1:
+        raise RuntimeError("country_ranking_max must be >= 1")
+    if not 0.0 <= args.country_sample_mean_ratio <= 1.0:
+        raise RuntimeError("country_sample_mean_ratio must be between 0 and 1")
+    if args.country_sample_std_ratio <= 0.0:
+        raise RuntimeError("country_sample_std_ratio must be > 0")
+
     output_dir = build_output_dir(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     raw_dir = output_dir / "raw"
@@ -1053,8 +1229,12 @@ def main() -> int:
 
     config = {
         "ruleset": RULESET,
-        "band_spec": args.band_spec,
         "ranking_type": args.ranking_type,
+        "top_country_count": args.top_country_count,
+        "players_per_country": args.players_per_country,
+        "country_ranking_max": args.country_ranking_max,
+        "country_sample_mean_ratio": args.country_sample_mean_ratio,
+        "country_sample_std_ratio": args.country_sample_std_ratio,
         "recent_scores_per_user": args.recent_scores_per_user,
         "best_scores_per_user": args.best_scores_per_user,
         "random_seed": args.random_seed,
@@ -1079,7 +1259,7 @@ def main() -> int:
         phase="initializing",
         export_started_at=export_started_at,
         ranking_type=args.ranking_type,
-        note="Initializing osu! ranked dataset collection",
+        note="Initializing osu! country-seeded try dataset collection",
     )
     client = OsuApiClient(
         client_id=client_id,
@@ -1089,14 +1269,24 @@ def main() -> int:
     )
     log_progress(f"Collector started in {output_dir.as_posix()}")
 
-    bands = parse_band_spec(args.band_spec)
-    sampled_users = build_sampling_manifest(client, bands, args.ranking_type, args.random_seed, raw_dir, state_path)
+    sampled_users = build_sampling_manifest(
+        client,
+        ranking_type=args.ranking_type,
+        top_country_count=args.top_country_count,
+        players_per_country=args.players_per_country,
+        country_ranking_max=args.country_ranking_max,
+        mean_ratio=args.country_sample_mean_ratio,
+        std_ratio=args.country_sample_std_ratio,
+        random_seed=args.random_seed,
+        raw_dir=raw_dir,
+        state_path=state_path,
+    )
     collect_user_snapshots(client, sampled_users, raw_dir, args.recent_scores_per_user, args.best_scores_per_user, state_path)
     collect_missing_beatmaps(client, raw_dir, state_path, sampled_users)
 
     update_state(state_path, phase="building_rows", sampled_users=sampled_users, note="Flattening rows into CSV")
     rows = build_rows(raw_dir)
-    csv_name = "osu_ranked_attempts_v1.csv"
+    csv_name = "osu_country_try_data_v1.csv"
     csv_path = output_dir / csv_name
     write_csv(csv_path, rows)
     log_progress(f"Wrote CSV with {len(rows)} rows")
@@ -1114,8 +1304,12 @@ def main() -> int:
         "export_duration_seconds": export_duration_seconds,
         "ranking_type": args.ranking_type,
         "random_seed": args.random_seed,
-        "band_spec": args.band_spec,
-        "ranking_total_available": final_state.get("ranking_total_available"),
+        "top_country_count": args.top_country_count,
+        "players_per_country": args.players_per_country,
+        "country_ranking_max": args.country_ranking_max,
+        "country_sample_mean_ratio": args.country_sample_mean_ratio,
+        "country_sample_std_ratio": args.country_sample_std_ratio,
+        "top_country_total_available": final_state.get("top_country_total_available"),
         "recent_scores_per_user": args.recent_scores_per_user,
         "best_scores_per_user": args.best_scores_per_user,
         "sampled_user_count": len(sampled_users),

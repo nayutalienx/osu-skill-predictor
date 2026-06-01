@@ -24,7 +24,8 @@ This schema is intentionally scoped to the MVP and favors fields that are availa
 
 The first iteration should collect data from these API areas:
 
-- User rankings: seed players across skill bands
+- Country rankings: seed the top countries
+- Country-local user rankings: sample players from each country's local leaderboard
 - User profile: player skill snapshot
 - User recent scores: recent play outcomes, including fails
 - Beatmap metadata: map difficulty and structure
@@ -34,13 +35,15 @@ The first iteration should collect data from these API areas:
 
 Suggested flow:
 
-1. Define ranking bands across the osu! performance ladder.
-2. Sample a reproducible set of users from each band.
-3. For each user, fetch the current user profile snapshot.
-4. For each user, fetch recent scores with failures included.
-5. For each user, optionally fetch best scores to improve positive-label coverage.
-6. For each beatmap referenced by those scores, fetch beatmap metadata and cache it locally.
-7. Flatten the result into one training row per score.
+1. Select the top countries from the osu! country rankings endpoint.
+2. For each selected country, define a local leaderboard window such as the top `10000` country players.
+3. Sample a reproducible set of local country ranks using a truncated normal distribution.
+4. Fetch the player entries for those sampled local ranks.
+5. For each sampled user, fetch the current user profile snapshot.
+6. For each sampled user, fetch recent scores with failures included.
+7. For each sampled user, optionally fetch best scores to improve positive-label coverage.
+8. For each beatmap referenced by those scores, fetch beatmap metadata and cache it locally.
+9. Flatten the result into one training row per score.
 
 ## Record Granularity Decision
 
@@ -133,8 +136,10 @@ This is one of the main reasons attempt-level rows are preferable for V1. Both t
 
 | Column | Type | Required | Description | Source |
 |---|---|---:|---|---|
-| `seed_band` | string | yes | Ranking band used when the user was sampled, for example `10001-20000`. | collector |
-| `seed_user_rank` | integer | yes | Actual `global_rank` returned by the rankings endpoint at collection time. | rankings |
+| `seed_country_code` | string | yes | Country code used for seeding, for example `US` or `JP`. | collector |
+| `seed_country_rank` | integer | yes | Position of the country in the country rankings endpoint at collection time. | country rankings |
+| `seed_country_player_rank` | integer | yes | Local player rank inside the seeded country leaderboard. | country-local rankings |
+| `seed_global_rank` | integer | yes | Actual `global_rank` returned by the player rankings endpoint at collection time. | country-local rankings |
 
 ### Player snapshot features
 
@@ -192,8 +197,10 @@ The first training dataset should not be considered valid unless it contains at 
 - `score_source`
 - `target_passed`
 - `target_accuracy`
-- `seed_band`
-- `seed_user_rank`
+- `seed_country_code`
+- `seed_country_rank`
+- `seed_country_player_rank`
+- `seed_global_rank`
 - `mods_raw`
 - `user_pp`
 - `user_accuracy`
@@ -288,7 +295,7 @@ Approved planning decisions:
 The repository should contain:
 
 - a tracked local bootstrap dataset under `data/sample/`
-- and an API-backed ranked collector for collecting real rows into `data/raw/`
+- and an API-backed collector for collecting real rows into `data/raw/`
 
 This gives the project both:
 
@@ -305,14 +312,14 @@ Recommended raw storage format for large collections:
 
 Current collector limitation:
 
-- this ranked collector depends on the public osu! rankings endpoint
-- that endpoint currently exposes only the top `10000` users
-- so band-based seeding for this collector must stay within `1-10000` unless a different seeding strategy is implemented
+- this collector depends on the public country player rankings endpoint
+- that endpoint currently exposes only the top `10000` users per country
+- so `country_ranking_max` must stay within that range unless a different seeding strategy is implemented
 
 ## Next Step
 
 After the sample dataset exists, the next implementation item should be:
 
-- run the ranked collector with real osu! OAuth credentials
-- produce a reproducible band-sampled dataset under `data/raw/`
+- run the country-seeded collector with real osu! OAuth credentials
+- produce a reproducible country-sampled dataset under `data/raw/`
 - inspect target balance, source mix, missingness, and repeated-user effects before model training

@@ -30,3 +30,9 @@ That collector requires:
 - `OSU_CLIENT_SECRET`
 
 and writes resumable raw snapshots plus a flattened CSV under `data/raw/`.
+
+The current live collector uses country-seeded sampling:
+
+- select top countries from the osu! country rankings endpoint
+- sample players from each country's top local leaderboard window
+- collect recent and best attempts for those sampled players
