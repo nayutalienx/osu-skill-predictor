@@ -27,3 +27,27 @@ Stop-Process -Id <JUPYTER_PID>
 ```
 
 If needed, confirm the server process by checking which Python process was started from the Jupyter command.
+
+## Jupyter RTC
+
+This repo uses JupyterLab Real-Time Collaboration via the `jupyter-collaboration` package.
+
+Install or update it in the local user Python environment:
+
+```powershell
+python -m pip install --user jupyter-collaboration
+```
+
+After installing or updating RTC, restart JupyterLab. The collaboration backend is loaded through `jupyter_server_ydoc`.
+
+Local RTC artifacts should not be committed:
+
+- `.jupyter/`
+- `.jupyter_ystore.db`
+- `.jupyter_ystore.db-*`
+- `*.log`
+
+Environment note:
+
+- Jupyter user-site executables live under `C:\Users\nayut\AppData\Roaming\Python\Python310\Scripts`
+- if `jupyter`, `jupyter-server`, or `jupyter-lab` are not found from the shell, use `python -m jupyterlab` or add that Scripts directory to `PATH`
