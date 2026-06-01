@@ -1,0 +1,12 @@
+{
+  "ruleset": "osu",
+  "ranking_type": "performance",
+  "top_country_count": 100,
+  "players_per_country": 100,
+  "country_ranking_max": 10000,
+  "country_sample_mean_ratio": 0.5,
+  "country_sample_std_ratio": 0.2,
+  "recent_scores_per_user": 30,
+  "best_scores_per_user": 20,
+  "random_seed": 42
+}

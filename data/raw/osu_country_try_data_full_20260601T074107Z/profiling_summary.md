@@ -1,0 +1,392 @@
+# Profiling Summary
+
+Dataset: `osu_country_try_data_v1.csv`
+
+## Collection Metadata
+
+- Source: official osu! API v2
+- Ruleset: `osu`
+- Export started at: `2026-06-01T07:41:07Z`
+- Export finished at: `2026-06-01T12:27:33Z`
+- Export duration seconds: `17186.0`
+- Earliest row collected_at: `2026-06-01T08:26:36Z`
+- Latest row collected_at: `2026-06-01T12:09:01Z`
+- Ranking type: `performance`
+- Random seed: `42`
+- Top country count: `100`
+- Players per country: `100`
+- Country ranking max: `10000`
+- Country sample mean ratio: `0.5`
+- Country sample std ratio: `0.2`
+- Country leaderboard size: `233`
+- Recent scores per user: `30`
+- Best scores per user: `20`
+
+## Size
+
+- Rows: `184615`
+- Unique users: `10000`
+- Unique beatmaps: `35430`
+- Sampled users requested: `10000`
+- Unique sampled users: `10000`
+- Processed users: `10000`
+
+## Sampled Users Per Country
+
+- `AE`: `100`
+- `AR`: `100`
+- `AT`: `100`
+- `AU`: `100`
+- `BA`: `100`
+- `BD`: `100`
+- `BE`: `100`
+- `BG`: `100`
+- `BH`: `100`
+- `BN`: `100`
+- `BO`: `100`
+- `BR`: `100`
+- `BY`: `100`
+- `CA`: `100`
+- `CH`: `100`
+- `CL`: `100`
+- `CN`: `100`
+- `CO`: `100`
+- `CR`: `100`
+- `CY`: `100`
+- `CZ`: `100`
+- `DE`: `100`
+- `DK`: `100`
+- `DO`: `100`
+- `DZ`: `100`
+- `EC`: `100`
+- `EE`: `100`
+- `EG`: `100`
+- `ES`: `100`
+- `FI`: `100`
+- `FR`: `100`
+- `GB`: `100`
+- `GE`: `100`
+- `GR`: `100`
+- `GT`: `100`
+- `HK`: `100`
+- `HN`: `100`
+- `HR`: `100`
+- `HU`: `100`
+- `ID`: `100`
+- `IE`: `100`
+- `IL`: `100`
+- `IN`: `100`
+- `IQ`: `100`
+- `IS`: `100`
+- `IT`: `100`
+- `JO`: `100`
+- `JP`: `100`
+- `KG`: `100`
+- `KH`: `100`
+- `KR`: `100`
+- `KW`: `100`
+- `KZ`: `100`
+- `LT`: `100`
+- `LU`: `100`
+- `LV`: `100`
+- `MA`: `100`
+- `MD`: `100`
+- `MK`: `100`
+- `MM`: `100`
+- `MN`: `100`
+- `MO`: `100`
+- `MV`: `100`
+- `MX`: `100`
+- `MY`: `100`
+- `NL`: `100`
+- `NO`: `100`
+- `NP`: `100`
+- `NZ`: `100`
+- `PA`: `100`
+- `PE`: `100`
+- `PH`: `100`
+- `PK`: `100`
+- `PL`: `100`
+- `PR`: `100`
+- `PT`: `100`
+- `PY`: `100`
+- `QA`: `100`
+- `RE`: `100`
+- `RO`: `100`
+- `RS`: `100`
+- `RU`: `100`
+- `SA`: `100`
+- `SE`: `100`
+- `SG`: `100`
+- `SI`: `100`
+- `SK`: `100`
+- `SV`: `100`
+- `TH`: `100`
+- `TN`: `100`
+- `TR`: `100`
+- `TT`: `100`
+- `TW`: `100`
+- `UA`: `100`
+- `US`: `100`
+- `UY`: `100`
+- `UZ`: `100`
+- `VE`: `100`
+- `VN`: `100`
+- `ZA`: `100`
+
+## Processed Users Per Country
+
+- `AE`: `100`
+- `AR`: `100`
+- `AT`: `100`
+- `AU`: `100`
+- `BA`: `100`
+- `BD`: `100`
+- `BE`: `100`
+- `BG`: `100`
+- `BH`: `100`
+- `BN`: `100`
+- `BO`: `100`
+- `BR`: `100`
+- `BY`: `100`
+- `CA`: `100`
+- `CH`: `100`
+- `CL`: `100`
+- `CN`: `100`
+- `CO`: `100`
+- `CR`: `100`
+- `CY`: `100`
+- `CZ`: `100`
+- `DE`: `100`
+- `DK`: `100`
+- `DO`: `100`
+- `DZ`: `100`
+- `EC`: `100`
+- `EE`: `100`
+- `EG`: `100`
+- `ES`: `100`
+- `FI`: `100`
+- `FR`: `100`
+- `GB`: `100`
+- `GE`: `100`
+- `GR`: `100`
+- `GT`: `100`
+- `HK`: `100`
+- `HN`: `100`
+- `HR`: `100`
+- `HU`: `100`
+- `ID`: `100`
+- `IE`: `100`
+- `IL`: `100`
+- `IN`: `100`
+- `IQ`: `100`
+- `IS`: `100`
+- `IT`: `100`
+- `JO`: `100`
+- `JP`: `100`
+- `KG`: `100`
+- `KH`: `100`
+- `KR`: `100`
+- `KW`: `100`
+- `KZ`: `100`
+- `LT`: `100`
+- `LU`: `100`
+- `LV`: `100`
+- `MA`: `100`
+- `MD`: `100`
+- `MK`: `100`
+- `MM`: `100`
+- `MN`: `100`
+- `MO`: `100`
+- `MV`: `100`
+- `MX`: `100`
+- `MY`: `100`
+- `NL`: `100`
+- `NO`: `100`
+- `NP`: `100`
+- `NZ`: `100`
+- `PA`: `100`
+- `PE`: `100`
+- `PH`: `100`
+- `PK`: `100`
+- `PL`: `100`
+- `PR`: `100`
+- `PT`: `100`
+- `PY`: `100`
+- `QA`: `100`
+- `RE`: `100`
+- `RO`: `100`
+- `RS`: `100`
+- `RU`: `100`
+- `SA`: `100`
+- `SE`: `100`
+- `SG`: `100`
+- `SI`: `100`
+- `SK`: `100`
+- `SV`: `100`
+- `TH`: `100`
+- `TN`: `100`
+- `TR`: `100`
+- `TT`: `100`
+- `TW`: `100`
+- `UA`: `100`
+- `US`: `100`
+- `UY`: `100`
+- `UZ`: `100`
+- `VE`: `100`
+- `VN`: `100`
+- `ZA`: `100`
+
+## Target Distribution
+
+- Passed: `181010`
+- Failed: `3605`
+- Pass rate: `98.0473%`
+
+## Numeric Summary
+
+- `target_accuracy`
+  - mean: `89.5277`
+  - median: `92.9078`
+  - min: `0.0000`
+  - max: `100.0000`
+- `beatmap_star_rating`
+  - mean: `3.9074`
+  - median: `3.8900`
+  - min: `0.1384`
+  - max: `189.2150`
+- `beatmap_bpm`
+  - mean: `165.7043`
+  - median: `174.0000`
+  - min: `34.0000`
+  - max: `500.0000`
+
+## Score Sources
+
+- `best`: `177920`
+- `recent`: `6695`
+
+## Rows Per Country
+
+- `AE`: `1619`
+- `AR`: `2062`
+- `AT`: `1957`
+- `AU`: `2076`
+- `BA`: `1527`
+- `BD`: `1661`
+- `BE`: `2045`
+- `BG`: `1673`
+- `BH`: `1790`
+- `BN`: `1886`
+- `BO`: `1577`
+- `BR`: `2131`
+- `BY`: `2085`
+- `CA`: `2018`
+- `CH`: `1796`
+- `CL`: `2090`
+- `CN`: `2200`
+- `CO`: `2044`
+- `CR`: `1738`
+- `CY`: `1765`
+- `CZ`: `2052`
+- `DE`: `2172`
+- `DK`: `1786`
+- `DO`: `1658`
+- `DZ`: `1553`
+- `EC`: `1905`
+- `EE`: `1746`
+- `EG`: `1452`
+- `ES`: `2097`
+- `FI`: `2086`
+- `FR`: `2215`
+- `GB`: `2106`
+- `GE`: `1300`
+- `GR`: `1611`
+- `GT`: `1605`
+- `HK`: `2083`
+- `HN`: `1552`
+- `HR`: `1812`
+- `HU`: `2085`
+- `ID`: `2080`
+- `IE`: `1649`
+- `IL`: `1762`
+- `IN`: `2016`
+- `IQ`: `1338`
+- `IS`: `1645`
+- `IT`: `2090`
+- `JO`: `1650`
+- `JP`: `2123`
+- `KG`: `1575`
+- `KH`: `1670`
+- `KR`: `2113`
+- `KW`: `1711`
+- `KZ`: `2140`
+- `LT`: `1895`
+- `LU`: `1711`
+- `LV`: `1757`
+- `MA`: `1600`
+- `MD`: `1600`
+- `MK`: `1656`
+- `MM`: `1618`
+- `MN`: `1337`
+- `MO`: `1832`
+- `MV`: `1692`
+- `MX`: `2034`
+- `MY`: `2063`
+- `NL`: `2066`
+- `NO`: `1881`
+- `NP`: `1731`
+- `NZ`: `1868`
+- `PA`: `1741`
+- `PE`: `2132`
+- `PH`: `2148`
+- `PK`: `1589`
+- `PL`: `2220`
+- `PR`: `1584`
+- `PT`: `2062`
+- `PY`: `1638`
+- `QA`: `1672`
+- `RE`: `1823`
+- `RO`: `2027`
+- `RS`: `1819`
+- `RU`: `2168`
+- `SA`: `1483`
+- `SE`: `2092`
+- `SG`: `2054`
+- `SI`: `1842`
+- `SK`: `1652`
+- `SV`: `1602`
+- `TH`: `2020`
+- `TN`: `1593`
+- `TR`: `2037`
+- `TT`: `1802`
+- `TW`: `2077`
+- `UA`: `2254`
+- `US`: `2272`
+- `UY`: `1632`
+- `UZ`: `1421`
+- `VE`: `1925`
+- `VN`: `2199`
+- `ZA`: `1516`
+
+## Top Mods
+
+- `NM`: `147783`
+- `DT`: `8492`
+- `HD`: `5281`
+- `HDDT`: `5062`
+- `HR`: `4519`
+- `NF`: `3216`
+- `HDHR`: `1416`
+- `HRDT`: `1155`
+- `NC`: `1029`
+- `TD`: `860`
+
+## Observations
+
+- This export uses deterministic country-local rank sampling, so re-running with the same config should preserve the sampled user pool.
+- `seed_country_player_rank` is the sampled local rank inside the country leaderboard, while `seed_global_rank` keeps the player's global position at sampling time.
+- The public country player rankings endpoint currently exposes only the top `10000` users per country, so `country_ranking_max` must stay within that coverage.
+- JSONL storage keeps raw data append-friendly and much easier to inspect than large directories of tiny JSON files.
+- `best` score rows improve positive-label coverage, but source mix should be tracked during training.
+- Resume safety comes from append-only user snapshots, beatmap cache reuse, and state.json checkpoints.

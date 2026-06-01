@@ -1,0 +1,19 @@
+{
+  "export_started_at": "2026-06-01T07:41:07Z",
+  "export_finished_at": "2026-06-01T12:27:33Z",
+  "export_duration_seconds": 17186.0,
+  "ranking_type": "performance",
+  "random_seed": 42,
+  "top_country_count": 100,
+  "players_per_country": 100,
+  "country_ranking_max": 10000,
+  "country_sample_mean_ratio": 0.5,
+  "country_sample_std_ratio": 0.2,
+  "top_country_total_available": 233,
+  "recent_scores_per_user": 30,
+  "best_scores_per_user": 20,
+  "sampled_user_count": 10000,
+  "unique_sampled_user_count": 10000,
+  "processed_user_count": 10000,
+  "exported_row_count": 184615
+}
