@@ -10,7 +10,7 @@ Do not assume production ML or API code exists unless it has been added later.
 Start JupyterLab from the repository root:
 
 ```powershell
-python -m jupyterlab --no-browser --ServerApp.root_dir="C:\Users\nayut\OneDrive\Документы\osu-skill-predictor"
+python -m jupyterlab --no-browser --ServerApp.root_dir=.
 ```
 
 Typical local URL:
@@ -49,5 +49,13 @@ Local RTC artifacts should not be committed:
 
 Environment note:
 
-- Jupyter user-site executables live under `C:\Users\nayut\AppData\Roaming\Python\Python310\Scripts`
+- Jupyter user-site executables typically live under `%APPDATA%\Python\Python310\Scripts`
 - if `jupyter`, `jupyter-server`, or `jupyter-lab` are not found from the shell, use `python -m jupyterlab` or add that Scripts directory to `PATH`
+
+## Markdown Paths
+
+For repository Markdown files:
+
+- prefer relative links and relative repo paths
+- avoid absolute local filesystem paths such as `C:\...`
+- use absolute local paths only when there is no reasonable relative alternative
