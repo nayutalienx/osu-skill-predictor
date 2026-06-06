@@ -1,0 +1,65 @@
+from __future__ import annotations
+
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
+
+from .features import (
+    BOOLEAN_FEATURE_COLUMNS,
+    CATEGORICAL_FEATURE_COLUMNS,
+    DEFAULT_RANDOM_SEED,
+    NUMERIC_FEATURE_COLUMNS,
+)
+
+
+def build_preprocessor() -> ColumnTransformer:
+    return ColumnTransformer(
+        transformers=[
+            ("numeric", "passthrough", NUMERIC_FEATURE_COLUMNS),
+            ("boolean", "passthrough", BOOLEAN_FEATURE_COLUMNS),
+            (
+                "categorical",
+                OneHotEncoder(handle_unknown="ignore", sparse_output=False),
+                CATEGORICAL_FEATURE_COLUMNS,
+            ),
+        ],
+        remainder="drop",
+    )
+
+
+def build_classifier_pipeline(random_seed: int = DEFAULT_RANDOM_SEED) -> Pipeline:
+    return Pipeline(
+        [
+            ("preprocess", build_preprocessor()),
+            (
+                "model",
+                RandomForestClassifier(
+                    n_estimators=120,
+                    max_depth=20,
+                    min_samples_leaf=5,
+                    random_state=random_seed,
+                    n_jobs=-1,
+                    class_weight="balanced_subsample",
+                ),
+            ),
+        ]
+    )
+
+
+def build_regressor_pipeline(random_seed: int = DEFAULT_RANDOM_SEED) -> Pipeline:
+    return Pipeline(
+        [
+            ("preprocess", build_preprocessor()),
+            (
+                "model",
+                RandomForestRegressor(
+                    n_estimators=120,
+                    max_depth=20,
+                    min_samples_leaf=5,
+                    random_state=random_seed,
+                    n_jobs=-1,
+                ),
+            ),
+        ]
+    )
