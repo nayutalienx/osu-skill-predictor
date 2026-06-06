@@ -52,6 +52,18 @@ Environment note:
 - Jupyter user-site executables typically live under `%APPDATA%\Python\Python310\Scripts`
 - if `jupyter`, `jupyter-server`, or `jupyter-lab` are not found from the shell, use `python -m jupyterlab` or add that Scripts directory to `PATH`
 
+## Notebook Progress
+
+For long-running notebook cells in this repo:
+
+- prefer visible progress or running-status output instead of silent cells
+- use a notebook-friendly progress display with staged updates when possible
+- if widget-based progress is unavailable, use `display(..., display_id=True)` or a similar HTML/text status fallback
+- for training or data-processing cells, show at least:
+  - current stage
+  - completed step count or percentage
+  - completion message
+
 ## Markdown Paths
 
 For repository Markdown files:
