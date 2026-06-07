@@ -1,0 +1,90 @@
+{
+  "artifact_version": "v2_comparison_winner",
+  "trained_at": "2026-06-07T05:27:54Z",
+  "source_raw_csv": "C:/Users/nayut/OneDrive/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/osu-skill-predictor/data/raw/osu_country_try_data_full_20260601T074107Z/osu_country_try_data_v1.csv",
+  "training_scope": "full_cleaned_dataset",
+  "feature_columns": [
+    "user_pp",
+    "user_accuracy",
+    "user_play_count",
+    "beatmap_star_rating",
+    "beatmap_bpm",
+    "beatmap_ar",
+    "beatmap_od",
+    "beatmap_cs",
+    "beatmap_hit_length_sec",
+    "beatmap_total_length_sec",
+    "beatmap_passcount",
+    "beatmap_playcount",
+    "star_gap",
+    "has_hidden",
+    "has_hardrock",
+    "has_doubletime",
+    "length_bucket"
+  ],
+  "target_columns": [
+    "target_passed",
+    "target_accuracy"
+  ],
+  "artifacts": {
+    "pass_model": "C:/Users/nayut/OneDrive/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/osu-skill-predictor/models/pass_model.joblib",
+    "accuracy_model": "C:/Users/nayut/OneDrive/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/osu-skill-predictor/models/accuracy_model.joblib"
+  },
+  "row_counts": {
+    "loaded": 184615,
+    "cleaned": 184229,
+    "unique_users": 9999,
+    "unique_beatmaps": 35261
+  },
+  "cleaning_report": {
+    "rows_loaded": 184615,
+    "rows_dropped_missing_required": 0,
+    "rows_dropped_ruleset": 0,
+    "rows_dropped_score_source": 0,
+    "rows_dropped_domain": 1,
+    "rows_dropped_duplicate_row_id": 385,
+    "rows_kept": 184229
+  },
+  "model_selection": {
+    "evaluation_mode": "cross_validation",
+    "random_seed": 42,
+    "comparison_summary_path": "C:/Users/nayut/OneDrive/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/osu-skill-predictor/data/processed/osu_country_try_data_full_20260601T074107Z/model_comparison_cv_summary.json",
+    "classifier_winner": "RandomForestClassifier",
+    "regressor_winner": "HistGradientBoostingRegressor"
+  },
+  "classifier": {
+    "estimator": "RandomForestClassifier",
+    "estimator_params": {
+      "n_estimators": 120,
+      "max_depth": 20,
+      "min_samples_leaf": 5,
+      "class_weight": "balanced_subsample",
+      "random_state": 42
+    },
+    "target": "target_passed",
+    "primary_metric": {
+      "metric_name": "pr_auc_mean",
+      "metric_value": 0.9946994670726916
+    }
+  },
+  "regressor": {
+    "estimator": "HistGradientBoostingRegressor",
+    "estimator_params": {
+      "max_depth": 6,
+      "min_samples_leaf": 20,
+      "random_state": 42
+    },
+    "target": "target_accuracy",
+    "primary_metric": {
+      "metric_name": "mae_mean",
+      "metric_value": 3.464399580571411
+    },
+    "prediction_postprocess": {
+      "note": "Model predictions are not clipped inside the serialized pipeline.",
+      "recommended_clip_range": [
+        0.0,
+        100.0
+      ]
+    }
+  }
+}

@@ -12,5 +12,3 @@ __pycache__/
 **/__pycache__/
 *.py[cod]
 data/processed/
-models/*.joblib
-models/model_metadata.json

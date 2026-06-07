@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+import joblib
 import pandas as pd
 from sklearn.model_selection import GroupKFold, StratifiedGroupKFold
 
@@ -50,6 +51,20 @@ def build_regressor_candidate_pipelines(random_seed: int = DEFAULT_RANDOM_SEED) 
     }
 
 
+def build_classifier_pipeline_by_name(model_name: str, random_seed: int = DEFAULT_RANDOM_SEED) -> Any:
+    pipelines = build_classifier_candidate_pipelines(random_seed=random_seed)
+    if model_name not in pipelines:
+        raise ValueError(f"Unsupported classifier model: {model_name}")
+    return pipelines[model_name]
+
+
+def build_regressor_pipeline_by_name(model_name: str, random_seed: int = DEFAULT_RANDOM_SEED) -> Any:
+    pipelines = build_regressor_candidate_pipelines(random_seed=random_seed)
+    if model_name not in pipelines:
+        raise ValueError(f"Unsupported regressor model: {model_name}")
+    return pipelines[model_name]
+
+
 def prepare_clean_dataset(raw_csv_path: Path) -> dict[str, Any]:
     raw_df = pd.read_csv(raw_csv_path)
     cleaned_df, cleaning_report = clean_raw_dataset(raw_df)
@@ -57,6 +72,17 @@ def prepare_clean_dataset(raw_csv_path: Path) -> dict[str, Any]:
         "raw_df": raw_df,
         "cleaned_df": cleaned_df,
         "cleaning_report": cleaning_report,
+    }
+
+
+def build_full_training_bundle(cleaned_df: pd.DataFrame) -> dict[str, Any]:
+    comfort_mapping = fit_star_comfort_mapping(cleaned_df)
+    featured_df = engineer_features(cleaned_df, comfort_mapping)
+    return {
+        "featured_df": featured_df,
+        "X": featured_df[ALL_FEATURE_COLUMNS].copy(),
+        "y_class": featured_df["target_passed"].astype(int),
+        "y_reg": featured_df["target_accuracy"].astype(float),
     }
 
 
@@ -429,6 +455,112 @@ def run_model_comparison(
     raise ValueError(f"Unsupported evaluation_mode: {evaluation_mode}")
 
 
+def _winner_metric_snapshot(result_df: pd.DataFrame, *, task: str) -> dict[str, Any]:
+    metric_name = CLASSIFIER_PRIMARY_METRIC if task == "classification" else REGRESSOR_PRIMARY_METRIC
+    metric_column = metric_name if metric_name in result_df.columns else f"{metric_name}_mean"
+    ascending = task == "regression"
+    winner = result_df.sort_values(by=[metric_column], ascending=ascending).iloc[0]
+    return {
+        "metric_name": metric_column,
+        "metric_value": float(winner[metric_column]),
+    }
+
+
+def save_winner_models(
+    comparison_result: dict[str, Any],
+    *,
+    models_root: str | Path = "models",
+    random_seed: int | None = None,
+    progress_callback: ProgressCallback | None = None,
+) -> dict[str, Any]:
+    raw_csv = Path(comparison_result["raw_csv_path"])
+    models_dir = Path(models_root)
+    models_dir.mkdir(parents=True, exist_ok=True)
+
+    result_seed = comparison_result["summary"].get("random_seed", DEFAULT_RANDOM_SEED)
+    chosen_seed = result_seed if random_seed is None else random_seed
+
+    total_steps = 6
+    emit_progress(progress_callback, step=1, total=total_steps, stage="load_raw", message="Loading raw dataset for winner-model serialization.")
+    prepared = prepare_clean_dataset(raw_csv)
+    emit_progress(progress_callback, step=2, total=total_steps, stage="feature_engineering", message="Engineering full-dataset features for final winner training.")
+    training_bundle = build_full_training_bundle(prepared["cleaned_df"])
+
+    classifier_name = str(comparison_result["summary"]["classifier_winner"])
+    regressor_name = str(comparison_result["summary"]["regressor_winner"])
+    classifier = build_classifier_pipeline_by_name(classifier_name, random_seed=chosen_seed)
+    regressor = build_regressor_pipeline_by_name(regressor_name, random_seed=chosen_seed)
+
+    emit_progress(progress_callback, step=3, total=total_steps, stage="train_classifier", message=f"Training final classifier artifact: {classifier_name}.")
+    classifier.fit(training_bundle["X"], training_bundle["y_class"])
+    emit_progress(progress_callback, step=4, total=total_steps, stage="train_regressor", message=f"Training final regressor artifact: {regressor_name}.")
+    regressor.fit(training_bundle["X"], training_bundle["y_reg"])
+
+    classifier_path = models_dir / "pass_model.joblib"
+    regressor_path = models_dir / "accuracy_model.joblib"
+    metadata_path = models_dir / "model_metadata.json"
+    emit_progress(progress_callback, step=5, total=total_steps, stage="serialize_models", message="Writing canonical model artifacts to models/.")
+    joblib.dump(classifier, classifier_path)
+    joblib.dump(regressor, regressor_path)
+
+    classifier_metrics = _winner_metric_snapshot(comparison_result["classifier_results"], task="classification")
+    regressor_metrics = _winner_metric_snapshot(comparison_result["regressor_results"], task="regression")
+    metadata = {
+        "artifact_version": "v2_comparison_winner",
+        "trained_at": iso_now(),
+        "source_raw_csv": raw_csv.as_posix(),
+        "training_scope": "full_cleaned_dataset",
+        "feature_columns": ALL_FEATURE_COLUMNS,
+        "target_columns": ["target_passed", "target_accuracy"],
+        "artifacts": {
+            "pass_model": classifier_path.as_posix(),
+            "accuracy_model": regressor_path.as_posix(),
+        },
+        "row_counts": {
+            "loaded": int(len(prepared["raw_df"])),
+            "cleaned": int(len(prepared["cleaned_df"])),
+            "unique_users": int(prepared["cleaned_df"]["user_id"].nunique()),
+            "unique_beatmaps": int(prepared["cleaned_df"]["beatmap_id"].nunique()),
+        },
+        "cleaning_report": prepared["cleaning_report"],
+        "model_selection": {
+            "evaluation_mode": comparison_result["summary"]["evaluation_mode"],
+            "random_seed": chosen_seed,
+            "comparison_summary_path": Path(comparison_result["summary_path"]).as_posix(),
+            "classifier_winner": classifier_name,
+            "regressor_winner": regressor_name,
+        },
+        "classifier": {
+            "estimator": classifier_name,
+            "estimator_params": selected_estimator_params(classifier.named_steps["model"]),
+            "target": "target_passed",
+            "primary_metric": classifier_metrics,
+        },
+        "regressor": {
+            "estimator": regressor_name,
+            "estimator_params": selected_estimator_params(regressor.named_steps["model"]),
+            "target": "target_accuracy",
+            "primary_metric": regressor_metrics,
+            "prediction_postprocess": {
+                "note": "Model predictions are not clipped inside the serialized pipeline.",
+                "recommended_clip_range": [0.0, 100.0],
+            },
+        },
+    }
+    write_json(metadata_path, metadata)
+    emit_progress(progress_callback, step=6, total=total_steps, stage="done", message="Winner models saved to models/.")
+
+    return {
+        "models_dir": models_dir,
+        "classifier_path": classifier_path,
+        "regressor_path": regressor_path,
+        "model_metadata_path": metadata_path,
+        "classifier_model_name": classifier_name,
+        "regressor_model_name": regressor_name,
+        "metadata": metadata,
+    }
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the small model comparison pass.")
     parser.add_argument(
@@ -461,6 +593,17 @@ def parse_args() -> argparse.Namespace:
         default=5,
         help="Requested fold count for grouped cross-validation mode.",
     )
+    parser.add_argument(
+        "--save-winners",
+        action="store_true",
+        help="After comparison, retrain the selected winners on the full cleaned dataset and save canonical model artifacts.",
+    )
+    parser.add_argument(
+        "--models-root",
+        type=Path,
+        default=Path("models"),
+        help="Directory for canonical serialized winner-model artifacts.",
+    )
     return parser.parse_args()
 
 
@@ -473,6 +616,13 @@ def main() -> None:
         evaluation_mode=args.evaluation_mode,
         cv_folds=args.cv_folds,
     )
+    saved_models = None
+    if args.save_winners:
+        saved_models = save_winner_models(
+            result,
+            models_root=args.models_root,
+            random_seed=args.random_seed,
+        )
     summary = {
         "raw_csv_path": str(result["raw_csv_path"]),
         "processed_dir": str(result["processed_dir"]),
@@ -484,6 +634,13 @@ def main() -> None:
         "regressor_winner": result["summary"]["regressor_winner"],
         "split_counts": result["split_counts"],
     }
+    if saved_models is not None:
+        summary["saved_models"] = {
+            "models_dir": str(saved_models["models_dir"]),
+            "classifier_path": str(saved_models["classifier_path"]),
+            "regressor_path": str(saved_models["regressor_path"]),
+            "model_metadata_path": str(saved_models["model_metadata_path"]),
+        }
     print(json.dumps(summary, indent=2))
 
 

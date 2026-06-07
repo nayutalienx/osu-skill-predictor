@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from ml.compare import run_model_comparison
+from ml.compare import run_model_comparison, save_winner_models
 
 
 SAMPLE_CSV_PATH = Path("data/sample/osu_ranked_attempts_sample_v1.csv")
@@ -63,6 +63,25 @@ class ModelComparisonTests(unittest.TestCase):
             self.assertTrue(result["classifier_results_path"].exists())
             self.assertTrue(result["regressor_results_path"].exists())
             self.assertTrue(result["summary_path"].exists())
+
+    def test_winner_models_can_be_saved_from_comparison_result(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="osu-compare-save-test-") as temp_dir:
+            temp_root = Path(temp_dir)
+            result = run_model_comparison(
+                raw_csv_path=SAMPLE_CSV_PATH,
+                processed_root=temp_root / "processed",
+                random_seed=42,
+                evaluation_mode="cross_validation",
+                cv_folds=2,
+            )
+            saved = save_winner_models(result, models_root=temp_root / "models", random_seed=42)
+
+            self.assertTrue(saved["classifier_path"].exists())
+            self.assertTrue(saved["regressor_path"].exists())
+            self.assertTrue(saved["model_metadata_path"].exists())
+            self.assertEqual(saved["metadata"]["model_selection"]["evaluation_mode"], "cross_validation")
+            self.assertIn(saved["classifier_model_name"], {"RandomForestClassifier", "HistGradientBoostingClassifier", "LogisticRegression"})
+            self.assertIn(saved["regressor_model_name"], {"RandomForestRegressor", "HistGradientBoostingRegressor", "Ridge"})
 
     def test_holdout_model_comparison_handles_non_contiguous_cleaned_index(self) -> None:
         with tempfile.TemporaryDirectory(prefix="osu-compare-gap-test-") as temp_dir:
