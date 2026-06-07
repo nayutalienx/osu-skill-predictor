@@ -33,6 +33,11 @@ const els = {
   offlinePlayCount: document.getElementById("offline-play-count"),
   offlineGlobalRank: document.getElementById("offline-global-rank"),
   offlineCountry: document.getElementById("offline-country"),
+  overlayEnabled: document.getElementById("overlay-enabled"),
+  overlayPosition: document.getElementById("overlay-position"),
+  overlayX: document.getElementById("overlay-x"),
+  overlayY: document.getElementById("overlay-y"),
+  overlayDisplay: document.getElementById("overlay-display"),
   refreshUserButton: document.getElementById("refresh-user-button"),
 };
 
@@ -85,6 +90,11 @@ function renderSettings(settings) {
   els.offlinePlayCount.value = settings.offline_play_count || 0;
   els.offlineGlobalRank.value = settings.offline_global_rank || 0;
   els.offlineCountry.value = settings.offline_country || "";
+  els.overlayEnabled.checked = settings.overlay_enabled || false;
+  els.overlayPosition.value = settings.overlay_position || "top-right";
+  els.overlayX.value = settings.overlay_x || 0;
+  els.overlayY.value = settings.overlay_y || 0;
+  els.overlayDisplay.value = settings.overlay_display || 0;
   els.oauthLink.href = settings.oauth_settings_url;
   if (settings.setup_required) {
     setSetupVisible(true);
@@ -149,6 +159,21 @@ function renderPrediction(prediction) {
   );
 }
 
+function renderOverlay(snapshot) {
+  if (!snapshot) return;
+  const enabled = state.overlayEnabled && snapshot.status === "ok" && snapshot.prediction;
+  const playing = snapshot.is_playing;
+  const show = enabled && !playing;
+  els.overlay.classList.toggle("hidden", !show);
+  if (show) {
+    const map = snapshot.beatmap;
+    const mapName = map ? [map.artist, map.title].filter(Boolean).join(" - ") || map.version || "" : "";
+    els.overlayMap.textContent = mapName || "n/a";
+    els.overlayPass.textContent = `Pass: ${fmtNumber(snapshot.prediction.pass_probability * 100, 1, "%")}`;
+    els.overlayAcc.textContent = `Acc: ${fmtNumber(snapshot.prediction.predicted_accuracy, 1, "%")}`;
+  }
+}
+
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, {
     headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -206,6 +231,11 @@ async function saveSettings() {
       offline_play_count: parseInt(els.offlinePlayCount.value) || 0,
       offline_global_rank: parseInt(els.offlineGlobalRank.value) || 0,
       offline_country: els.offlineCountry.value.trim(),
+      overlay_enabled: els.overlayEnabled.checked,
+      overlay_position: els.overlayPosition.value,
+      overlay_x: parseInt(els.overlayX.value) || 0,
+      overlay_y: parseInt(els.overlayY.value) || 0,
+      overlay_display: parseInt(els.overlayDisplay.value) || 0,
     };
     const settings = await fetchJson("/api/live/settings", {
       method: "POST",
@@ -227,6 +257,21 @@ async function startTosu() {
     await refreshSnapshot();
   } catch (error) {
     els.setupFeedback.textContent = "Could not start tosu.";
+  }
+}
+
+function renderOverlay(snapshot) {
+  if (!snapshot) return;
+  const enabled = state.overlayEnabled && snapshot.status === "ok" && snapshot.prediction;
+  const playing = snapshot.is_playing;
+  const show = enabled && !playing;
+  els.overlay.classList.toggle("hidden", !show);
+  if (show) {
+    const map = snapshot.beatmap;
+    const mapName = map ? [map.artist, map.title].filter(Boolean).join(" - ") || map.version || "" : "";
+    els.overlayMap.textContent = mapName || "n/a";
+    els.overlayPass.textContent = `Pass: ${fmtNumber(snapshot.prediction.pass_probability * 100, 1, "%")}`;
+    els.overlayAcc.textContent = `Acc: ${fmtNumber(snapshot.prediction.predicted_accuracy, 1, "%")}`;
   }
 }
 

@@ -18,6 +18,11 @@ class LiveSettingsPayload(BaseModel):
     offline_play_count: int = Field(default=0, ge=0)
     offline_global_rank: int = Field(default=0, ge=0)
     offline_country: str = Field(default="")
+    overlay_enabled: bool = Field(default=False)
+    overlay_position: str = Field(default="top-right")
+    overlay_x: int = Field(default=0)
+    overlay_y: int = Field(default=0)
+    overlay_display: int = Field(default=0)
 
 
 class LiveSettingsResponse(BaseModel):
@@ -37,6 +42,11 @@ class LiveSettingsResponse(BaseModel):
     offline_play_count: int
     offline_global_rank: int
     offline_country: str
+    overlay_enabled: bool
+    overlay_position: str
+    overlay_x: int
+    overlay_y: int
+    overlay_display: int
 
 
 class LivePlayerResponse(BaseModel):
@@ -89,6 +99,7 @@ class LiveSnapshotResponse(BaseModel):
     player: LivePlayerResponse | None = None
     beatmap: LiveBeatmapResponse | None = None
     prediction: LivePredictionResponse | None = None
+    is_playing: bool = False
 
 
 class TosuStartResponse(BaseModel):

@@ -85,6 +85,11 @@ class LiveConfig:
     offline_play_count: int = 0
     offline_global_rank: int = 0
     offline_country: str = ""
+    overlay_enabled: bool = False
+    overlay_position: str = "top-right"
+    overlay_x: int = 0
+    overlay_y: int = 0
+    overlay_display: int = 0
 
     @classmethod
     def from_env(cls) -> "LiveConfig":
@@ -125,6 +130,11 @@ class LiveConfig:
             offline_play_count=int(settings.get("offline_play_count", cls.offline_play_count)),
             offline_global_rank=int(settings.get("offline_global_rank", cls.offline_global_rank)),
             offline_country=str(settings.get("offline_country", "")),
+            overlay_enabled=bool(settings.get("overlay_enabled", cls.overlay_enabled)),
+            overlay_position=str(settings.get("overlay_position", cls.overlay_position)),
+            overlay_x=int(settings.get("overlay_x", cls.overlay_x)),
+            overlay_y=int(settings.get("overlay_y", cls.overlay_y)),
+            overlay_display=int(settings.get("overlay_display", cls.overlay_display)),
         )
 
 
@@ -163,6 +173,16 @@ def _parse_country(profile: dict[str, Any]) -> str | None:
         name = str(raw.get("name", "")).strip()
         return name or None
     return str(raw).strip() or None
+
+
+def _is_playing(payload: dict[str, Any]) -> bool:
+    menu = payload.get("menu") or {}
+    if _as_int(menu.get("state")) == 2:
+        return True
+    play = payload.get("play") or {}
+    if _as_int(play.get("score")) and _as_int(play.get("score")) > 0:
+        return True
+    return False
 
 
 def normalize_mods(mods: Any) -> str:
@@ -215,6 +235,7 @@ class TosuLiveState:
     passcount: int | None
     playcount: int | None
     refreshed_at: str
+    is_playing: bool = False
 
 
 def parse_tosu_v2_state(payload: dict[str, Any]) -> TosuLiveState:
@@ -272,6 +293,7 @@ def parse_tosu_v2_state(payload: dict[str, Any]) -> TosuLiveState:
         passcount=None,
         playcount=None,
         refreshed_at=utc_now_iso(),
+        is_playing=_is_playing(payload),
     )
 
 
@@ -686,6 +708,11 @@ class LiveService:
             "offline_play_count": self._config.offline_play_count,
             "offline_global_rank": self._config.offline_global_rank,
             "offline_country": self._config.offline_country,
+            "overlay_enabled": self._config.overlay_enabled,
+            "overlay_position": self._config.overlay_position,
+            "overlay_x": self._config.overlay_x,
+            "overlay_y": self._config.overlay_y,
+            "overlay_display": self._config.overlay_display,
         }
 
     def update_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -714,6 +741,11 @@ class LiveService:
                 "offline_play_count": int(payload.get("offline_play_count", self._config.offline_play_count)),
                 "offline_global_rank": int(payload.get("offline_global_rank", self._config.offline_global_rank)),
                 "offline_country": str(payload.get("offline_country", self._config.offline_country)),
+                "overlay_enabled": bool(payload.get("overlay_enabled", self._config.overlay_enabled)),
+                "overlay_position": str(payload.get("overlay_position", self._config.overlay_position)),
+                "overlay_x": int(payload.get("overlay_x", self._config.overlay_x)),
+                "overlay_y": int(payload.get("overlay_y", self._config.overlay_y)),
+                "overlay_display": int(payload.get("overlay_display", self._config.overlay_display)),
             }
         )
         self._config = LiveConfig.from_env()
@@ -909,6 +941,7 @@ class LiveService:
                 "player": None,
                 "beatmap": None,
                 "prediction": None,
+                "is_playing": False,
             }
         except requests.exceptions.HTTPError as exc:
             response_text = ""
@@ -928,6 +961,7 @@ class LiveService:
                     "player": None,
                     "beatmap": None,
                     "prediction": None,
+                "is_playing": False,
                 }
             return {
                 "status": "error",
@@ -938,6 +972,7 @@ class LiveService:
                 "player": None,
                 "beatmap": None,
                 "prediction": None,
+                "is_playing": False,
             }
         except requests.RequestException:
             return {
@@ -949,6 +984,7 @@ class LiveService:
                 "player": None,
                 "beatmap": None,
                 "prediction": None,
+                "is_playing": False,
             }
 
         manual = self._config.player_source == "manual" and bool(self._config.manual_username.strip())
@@ -1029,6 +1065,7 @@ class LiveService:
                 "player": player.__dict__,
                 "beatmap": beatmap.__dict__,
                 "prediction": None,
+                "is_playing": live_state.is_playing,
             }
 
         missing_beatmap = live_state.beatmap_id is None
@@ -1045,6 +1082,7 @@ class LiveService:
                 "player": player.__dict__,
                 "beatmap": beatmap.__dict__,
                 "prediction": None,
+                "is_playing": live_state.is_playing,
             }
 
         if not offline and not self._osu_api_client.configured:
@@ -1057,6 +1095,7 @@ class LiveService:
                 "player": player.__dict__,
                 "beatmap": beatmap.__dict__,
                 "prediction": None,
+                "is_playing": live_state.is_playing,
             }
 
         if offline:
@@ -1077,6 +1116,7 @@ class LiveService:
                     "player": player.__dict__,
                     "beatmap": beatmap.__dict__,
                     "prediction": None,
+                    "is_playing": live_state.is_playing,
                 }
 
         try:
@@ -1092,6 +1132,7 @@ class LiveService:
                 "player": player.__dict__,
                 "beatmap": beatmap.__dict__,
                 "prediction": None,
+                "is_playing": live_state.is_playing,
             }
 
         return {
@@ -1103,4 +1144,5 @@ class LiveService:
             "player": player.__dict__,
             "beatmap": beatmap.__dict__,
             "prediction": prediction.__dict__,
+            "is_playing": enriched.is_playing,
         }

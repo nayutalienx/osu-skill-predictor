@@ -83,6 +83,32 @@
             <input id="offline-mode" type="checkbox" />
             <span>Offline mode (use manual stats)</span>
           </label>
+          <label class="field checkbox-field">
+            <input id="overlay-enabled" type="checkbox" />
+            <span>Show prediction overlay (top-right)</span>
+          </label>
+          <label class="field">
+            <span>Overlay position</span>
+            <select id="overlay-position">
+              <option value="top-right">Top-right</option>
+              <option value="top-left">Top-left</option>
+              <option value="bottom-right">Bottom-right</option>
+              <option value="bottom-left">Bottom-left</option>
+              <option value="custom">Custom (x, y)</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Custom X</span>
+            <input id="overlay-x" type="number" placeholder="0" />
+          </label>
+          <label class="field">
+            <span>Custom Y</span>
+            <input id="overlay-y" type="number" placeholder="0" />
+          </label>
+          <label class="field">
+            <span>Display (1, 2, .., 0=primary)</span>
+            <input id="overlay-display" type="number" min="0" placeholder="0" />
+          </label>
           <label class="field">
             <span>Offline PP</span>
             <input id="offline-pp" type="number" step="0.01" min="0" placeholder="0" />

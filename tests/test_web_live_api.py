@@ -26,6 +26,11 @@ class FakeLiveService:
             "offline_play_count": 0,
             "offline_global_rank": 0,
             "offline_country": "",
+            "overlay_enabled": False,
+            "overlay_position": "top-right",
+            "overlay_x": 0,
+            "overlay_y": 0,
+            "overlay_display": 0,
         }
 
     def update_settings(self, payload: dict) -> dict:
