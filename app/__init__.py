@@ -1,1 +1,3 @@
-"""Application package placeholder for the later API milestone."""
+from .main import app
+
+__all__ = ["app"]

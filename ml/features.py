@@ -143,6 +143,22 @@ class ComfortMapping:
     fallback_value: float
 
 
+def serialize_comfort_mapping(mapping: ComfortMapping) -> dict[str, Any]:
+    return {
+        "edges": [float(edge) for edge in mapping.edges],
+        "values": [float(value) for value in mapping.values],
+        "fallback_value": float(mapping.fallback_value),
+    }
+
+
+def deserialize_comfort_mapping(payload: dict[str, Any]) -> ComfortMapping:
+    return ComfortMapping(
+        edges=[float(edge) for edge in payload["edges"]],
+        values=[float(value) for value in payload["values"]],
+        fallback_value=float(payload["fallback_value"]),
+    )
+
+
 def find_latest_raw_csv(raw_root: str | Path = "data/raw") -> Path:
     root = Path(raw_root)
     candidates = []

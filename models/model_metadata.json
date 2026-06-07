@@ -1,6 +1,6 @@
 {
   "artifact_version": "v2_comparison_winner",
-  "trained_at": "2026-06-07T05:27:54Z",
+  "trained_at": "2026-06-07T05:41:45Z",
   "source_raw_csv": "C:/Users/nayut/OneDrive/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/osu-skill-predictor/data/raw/osu_country_try_data_full_20260601T074107Z/osu_country_try_data_v1.csv",
   "training_scope": "full_cleaned_dataset",
   "feature_columns": [
@@ -26,9 +26,57 @@
     "target_passed",
     "target_accuracy"
   ],
+  "star_comfort_mapping": {
+    "edges": [
+      2.08446,
+      81.3195,
+      131.85,
+      181.29500000000007,
+      235.095,
+      299.895,
+      389.27,
+      477.977,
+      600.774,
+      756.11,
+      959.193,
+      1190.73,
+      1479.35,
+      1808.8919999999996,
+      2163.76,
+      2596.5,
+      3079.41,
+      3771.51,
+      4441.8,
+      5591.46,
+      33570.1
+    ],
+    "values": [
+      2.08201,
+      2.2023,
+      2.34168,
+      2.42581,
+      2.51209,
+      2.61638,
+      2.88271,
+      3.22665,
+      3.41587,
+      3.67911,
+      4.0659,
+      4.43182,
+      4.57759,
+      4.75364,
+      4.99374,
+      5.08931,
+      5.27836,
+      5.47566,
+      5.69808,
+      6.11201
+    ],
+    "fallback_value": 3.85268
+  },
   "artifacts": {
-    "pass_model": "C:/Users/nayut/OneDrive/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/osu-skill-predictor/models/pass_model.joblib",
-    "accuracy_model": "C:/Users/nayut/OneDrive/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/osu-skill-predictor/models/accuracy_model.joblib"
+    "pass_model": "models/pass_model.joblib",
+    "accuracy_model": "models/accuracy_model.joblib"
   },
   "row_counts": {
     "loaded": 184615,
@@ -48,7 +96,7 @@
   "model_selection": {
     "evaluation_mode": "cross_validation",
     "random_seed": 42,
-    "comparison_summary_path": "C:/Users/nayut/OneDrive/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/osu-skill-predictor/data/processed/osu_country_try_data_full_20260601T074107Z/model_comparison_cv_summary.json",
+    "comparison_summary_path": "data/processed/osu_country_try_data_full_20260601T074107Z/model_comparison_cv_summary.json",
     "classifier_winner": "RandomForestClassifier",
     "regressor_winner": "HistGradientBoostingRegressor"
   },

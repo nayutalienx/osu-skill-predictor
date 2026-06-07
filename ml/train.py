@@ -21,6 +21,7 @@ from .features import (
     engineer_features,
     find_latest_raw_csv,
     fit_star_comfort_mapping,
+    serialize_comfort_mapping,
 )
 from .pipeline import build_classifier_pipeline, build_regressor_pipeline
 
@@ -188,6 +189,7 @@ def run_baseline_training(
         },
         "feature_columns": ALL_FEATURE_COLUMNS,
         "target_columns": ["target_passed", "target_accuracy"],
+        "star_comfort_mapping": serialize_comfort_mapping(comfort_mapping),
         "cleaning_report": cleaning_report,
     }
     write_json(metadata_path, dataset_metadata)
@@ -207,6 +209,7 @@ def run_baseline_training(
         "split_strategy": SPLIT_STRATEGY_NAME,
         "split_random_seed": random_seed,
         "feature_columns": ALL_FEATURE_COLUMNS,
+        "star_comfort_mapping": serialize_comfort_mapping(comfort_mapping),
         "artifacts": {
             "pass_model": classifier_path.as_posix(),
             "accuracy_model": regressor_path.as_posix(),
