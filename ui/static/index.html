@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>osu! Skill Predictor</title>
+    <link rel="stylesheet" href="/static/web.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Local Web UI</p>
+          <h1>osu! Skill Predictor</h1>
+          <p class="hero-copy">Live osu! data from tosu & osu! API, ML prediction from bundled models.</p>
+        </div>
+        <div class="hero-actions">
+          <button id="refresh-button" class="button button-primary">Refresh now</button>
+          <button id="toggle-setup-button" class="button button-secondary">Open setup</button>
+          <button id="quit-button" class="button button-secondary">Quit</button>
+        </div>
+      </header>
+
+      <section class="status-card">
+        <div class="status-topline">
+          <div>
+            <p class="status-label">Status</p>
+            <h2 id="status-message">Loading live snapshot...</h2>
+          </div>
+          <div class="status-meta">
+            <p id="status-sources">Sources: waiting</p>
+            <p id="status-timestamp">Last refresh: never</p>
+          </div>
+        </div>
+        <div class="progress-shell">
+          <div id="progress-bar" class="progress-bar"></div>
+        </div>
+      </section>
+
+      <section id="setup-panel" class="setup-card hidden">
+        <div class="setup-head">
+          <div>
+            <p class="eyebrow">Setup</p>
+            <h3>Required local settings</h3>
+          </div>
+          <div class="setup-actions">
+            <a id="oauth-link" class="button button-secondary" href="#" target="_blank" rel="noreferrer">Open osu! OAuth settings</a>
+            <button id="save-settings-button" class="button button-primary">Save settings</button>
+          </div>
+        </div>
+        <p id="setup-hint" class="setup-hint">
+          Create an OAuth app at osu! account settings (callback: http://localhost:1337), then paste Client ID &amp; Secret.
+        </p>
+        <div class="form-grid">
+          <label class="field">
+            <span>tosu URL</span>
+            <input id="tosu-base-url" type="text" />
+          </label>
+          <label class="field">
+            <span>tosu.exe path (optional)</span>
+            <input id="tosu-executable-path" type="text" />
+          </label>
+          <label class="field">
+            <span>osu! Client ID</span>
+            <input id="osu-client-id" type="text" />
+          </label>
+          <label class="field">
+            <span>osu! Client Secret</span>
+            <input id="osu-client-secret" type="password" />
+          </label>
+          <label class="field">
+            <span>Player detection</span>
+            <select id="player-source">
+              <option value="tosu">Auto-detect from osu!</option>
+              <option value="manual">Manual nickname</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Manual osu! nickname</span>
+            <input id="manual-username" type="text" placeholder="pssyMonster228" />
+          </label>
+          <label class="field checkbox-field">
+            <input id="offline-mode" type="checkbox" />
+            <span>Offline mode (use manual stats)</span>
+          </label>
+          <label class="field">
+            <span>Offline PP</span>
+            <input id="offline-pp" type="number" step="0.01" min="0" placeholder="0" />
+          </label>
+          <label class="field">
+            <span>Offline Accuracy (%)</span>
+            <input id="offline-accuracy" type="number" step="0.01" min="0" max="100" placeholder="0" />
+          </label>
+          <label class="field">
+            <span>Offline Play Count</span>
+            <input id="offline-play-count" type="number" min="0" placeholder="0" />
+          </label>
+          <label class="field">
+            <span>Offline Global Rank</span>
+            <input id="offline-global-rank" type="number" min="0" placeholder="0" />
+          </label>
+          <label class="field">
+            <span>Offline Country (e.g. KZ)</span>
+            <input id="offline-country" type="text" placeholder="KZ" />
+          </label>
+        </div>
+        <div class="setup-footer">
+          <button id="start-tosu-button" class="button button-secondary">Start bundled tosu</button>
+          <p id="setup-feedback" class="setup-feedback"></p>
+        </div>
+      </section>
+
+      <section class="cards">
+        <article class="card">
+          <p class="eyebrow">Current Player <button id="refresh-user-button" class="inline-btn">&#x21bb;</button></p>
+          <div id="player-grid" class="metric-grid"></div>
+        </article>
+        <article class="card">
+          <p class="eyebrow">Current Map</p>
+          <div id="beatmap-grid" class="metric-grid"></div>
+        </article>
+        <article class="card prediction-card">
+          <p class="eyebrow">Prediction</p>
+          <div id="prediction-grid" class="metric-grid"></div>
+        </article>
+      </section>
+    </div>
+
+    <script src="/static/web.js"></script>
+  </body>
+</html>
