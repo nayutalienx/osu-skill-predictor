@@ -53,6 +53,25 @@ class FeatureEngineeringTests(unittest.TestCase):
         ]
         self.assertTrue((dt_rows["has_doubletime"] == 1).all())
 
+    def test_feature_engineering_handles_mod_edge_cases(self) -> None:
+        raw_df = pd.read_csv(SAMPLE_CSV_PATH)
+        cleaned_df, _ = clean_raw_dataset(raw_df)
+        split_df = build_split_assignment(cleaned_df, random_seed=42)
+        train_mask = split_df["split_name"].eq("train").to_numpy()
+        mapping = fit_star_comfort_mapping(cleaned_df.iloc[train_mask].copy())
+
+        edge_rows = cleaned_df.iloc[[0, 1]].copy()
+        edge_rows.loc[edge_rows.index[0], "mods_raw"] = "NC"
+        edge_rows.loc[edge_rows.index[1], "mods_raw"] = ""
+        featured_df = engineer_features(edge_rows, mapping)
+
+        self.assertEqual(int(featured_df.iloc[0]["has_doubletime"]), 1)
+        self.assertEqual(int(featured_df.iloc[0]["has_hidden"]), 0)
+        self.assertEqual(int(featured_df.iloc[0]["has_hardrock"]), 0)
+        self.assertEqual(int(featured_df.iloc[1]["has_doubletime"]), 0)
+        self.assertEqual(int(featured_df.iloc[1]["has_hidden"]), 0)
+        self.assertEqual(int(featured_df.iloc[1]["has_hardrock"]), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

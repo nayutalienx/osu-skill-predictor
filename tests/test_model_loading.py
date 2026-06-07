@@ -50,6 +50,12 @@ class ModelArtifactTests(unittest.TestCase):
         self.assertTrue(report["classifier_probabilities_equal"])
         self.assertTrue(report["regressor_predictions_equal"])
 
+    def test_load_serialized_models_fails_when_artifacts_are_missing(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="osu-model-missing-") as temp_dir:
+            temp_root = Path(temp_dir)
+            with self.assertRaises(FileNotFoundError):
+                load_serialized_models(temp_root / "missing_models")
+
 
 if __name__ == "__main__":
     unittest.main()
