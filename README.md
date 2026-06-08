@@ -97,7 +97,7 @@ The practical takeaway is:
 
 ## Feature Importances
 
-_Analyzed from the baseline model pipeline (notebook: `02_baseline_model.ipynb`)._
+Feature importances extracted from the baseline model pipeline (`notebooks/02_baseline_model.ipynb`).
 
 ### Classifier (Pass Probability)
 
@@ -105,13 +105,6 @@ _Analyzed from the baseline model pipeline (notebook: `02_baseline_model.ipynb`)
 
 The classifier relies most on `beatmap_passcount`, `beatmap_playcount`, and `user_pp`.  
 Mod features (`has_hidden`, `has_hardrock`, `has_doubletime`) have relatively low influence on pass prediction.
-
-### Regressor (Predicted Accuracy)
-
-![Regressor feature importances](docs/regressor_importances.png)
-
-Accuracy predictions are dominated by `user_accuracy`, `beatmap_star_rating`, and `star_gap`.  
-Beatmap popularity signals (`passcount`, `playcount`) are far less important for accuracy than for pass probability.
 
 ## Quick Start
 
