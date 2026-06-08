@@ -95,6 +95,24 @@ The practical takeaway is:
 - regressor choice is stable, and `HistGradientBoostingRegressor` is clearly the strongest default
 - fit time is already good enough for local retraining and interactive notebook work
 
+## Feature Importances
+
+_Analyzed from the baseline model pipeline (notebook: `02_baseline_model.ipynb`)._
+
+### Classifier (Pass Probability)
+
+![Classifier feature importances](docs/classifier_importances.png)
+
+The classifier relies most on `beatmap_passcount`, `beatmap_playcount`, and `user_pp`.  
+Mod features (`has_hidden`, `has_hardrock`, `has_doubletime`) have relatively low influence on pass prediction.
+
+### Regressor (Predicted Accuracy)
+
+![Regressor feature importances](docs/regressor_importances.png)
+
+Accuracy predictions are dominated by `user_accuracy`, `beatmap_star_rating`, and `star_gap`.  
+Beatmap popularity signals (`passcount`, `playcount`) are far less important for accuracy than for pass probability.
+
 ## Quick Start
 
 Install the main runtime dependencies:
