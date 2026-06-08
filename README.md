@@ -209,3 +209,7 @@ It is not intended to be:
 - a production osu! recommendation platform;
 - a live ranking-grade inference service;
 - a deep-learning or replay-driven system.
+
+## Acknowledgments
+
+This project is powered by **[tosu](https://github.com/tosuapp/tosu)** — an open-source osu! memory reader that provides real-time beatmap and gameplay data. Thank you to the tosu team for making local osu! tooling possible.
