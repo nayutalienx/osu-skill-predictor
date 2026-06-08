@@ -14,6 +14,7 @@
 1. Download `osu-skill-predictor-web.zip` from the [latest release](https://github.com/nayutalienx/osu-skill-predictor/releases/latest)
 2. Extract and run `osu-skill-predictor-web.exe`
 3. Enter your osu! API v2 credentials, then save
+4. Enable the overlay in settings (off by default)
 
 An always-on-top overlay shows pass probability and predicted accuracy for every beatmap. Overlay works in **windowed or borderless** mode.
 

@@ -27,9 +27,9 @@ For osu! players who just want to run the predictor — no Python, no setup.
 1. Double-click `osu-skill-predictor-web.exe`
 2. Your browser opens automatically to the predictor UI
 3. Enter your osu! API **Client ID** and **Client Secret**, then click **Save**
-4. The overlay window appears with real-time predictions
+4. **Enable the overlay** — go to settings and turn on **Overlay Enabled**
 
-That's it. The predictor detects the current beatmap from osu! and shows pass probability and predicted accuracy.
+That's it. The predictor detects the current beatmap from osu! and the overlay shows pass probability and predicted accuracy.
 
 ## Overlay
 
