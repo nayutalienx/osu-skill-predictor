@@ -18,6 +18,8 @@
 
 An always-on-top overlay shows pass probability and predicted accuracy for every beatmap. Overlay works in **windowed or borderless** mode.
 
+![Overlay preview](docs/assets/predictor-overlay.png)
+
 ---
 
 The project is intentionally shaped like a lightweight production ML service:
