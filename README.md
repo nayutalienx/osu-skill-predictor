@@ -5,6 +5,20 @@
 - the probability that a player will pass an osu! standard beatmap;
 - the expected accuracy percentage for that attempt.
 
+## Quick Start for Players
+
+> **Want predictions while you play?** Grab the standalone bundle — no Python needed.
+
+**[Player Guide &mdash; download, setup, overlay →](docs/standalone_player_guide.md)**
+
+1. Download `osu-skill-predictor-web.zip` from the [latest release](https://github.com/nayutalienx/osu-skill-predictor/releases/latest)
+2. Extract and run `osu-skill-predictor-web.exe`
+3. Enter your osu! API v2 credentials, then save
+
+An always-on-top overlay shows pass probability and predicted accuracy for every beatmap. Overlay works in **windowed or borderless** mode.
+
+---
+
 The project is intentionally shaped like a lightweight production ML service:
 
 - local dataset collection and training workflow;
